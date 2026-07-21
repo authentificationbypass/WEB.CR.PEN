@@ -1,0 +1,384 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Report</title>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <main class="report-shell">
+        <header class="report-hero">
+            <div style="min-width:0; flex:1;">
+                <p class="eyebrow">Completed Analysis</p>
+                <h1>{{ result.target_url }}</h1>
+                <p>Scan period: {{ result.started_at }} to {{ result.finished_at }}</p>
+            </div>
+            <div class="risk-badge risk-{{ result.risk_level.lower() }}">
+                <span>Risk Score</span>
+                <strong>{{ result.risk_score }}</strong>
+                <small>{{ result.risk_level }}</small>
+            </div>
+            <div class="sec-grade grade-{{ result.security_grade | lower | replace('+', '-plus') }}">
+                <span>Security</span>
+                <strong>{{ result.security_grade }}</strong>
+                <small>Headers</small>
+            </div>
+        </header>
+
+        <section class="metric-grid">
+            <article class="metric-card">
+                <span>Pages</span>
+                <strong>{{ result.summary.pages_scanned }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Requests</span>
+                <strong>{{ result.summary.requests_observed }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Domains</span>
+                <strong>{{ result.summary.domains_contacted }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Countries</span>
+                <strong>{{ result.summary.countries_contacted }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Cookies</span>
+                <strong>{{ result.summary.cookies_detected }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Fingerprinting</span>
+                <strong>{{ result.summary.fingerprint_techniques }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Trackers</span>
+                <strong>{{ result.summary.get('trackers_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('gov_ips_detected', 0) > 0 %} metric-alert{% endif %}">
+                <span>Gov IPs</span>
+                <strong>{{ result.summary.get('gov_ips_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('js_vulns_detected', 0) > 0 %} metric-warn{% endif %}">
+                <span>JS CVEs</span>
+                <strong>{{ result.summary.get('js_vulns_detected', 0) }}</strong>
+            </article>
+        </section>
+
+        <section class="panel two-column">
+            <article>
+                <h2>Domain Traffic</h2>
+                {{ bar_chart | safe }}
+            </article>
+            <article>
+                <h2>Geo Analysis</h2>
+                {{ country_chart | safe }}
+            </article>
+        </section>
+
+        <section class="panel two-column">
+            <article>
+                <h2>Risk Findings</h2>
+                <div class="finding-list">
+                    {% for finding in result.risk_findings %}
+                    <div class="finding-card severity-{{ finding.severity }}">
+                        <div class="finding-topline">
+                            <strong>{{ finding.name }}</strong>
+                            <span>+{{ finding.score }}</span>
+                        </div>
+                        <p>{{ finding.rationale }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+            <article>
+                <h2>Performance</h2>
+                <dl class="definition-grid">
+                    <div><dt>Avg. Load</dt><dd>{{ result.performance.load_time_ms or 'n/a' }} ms</dd></div>
+                    <div><dt>DOM Ready</dt><dd>{{ result.performance.dom_content_loaded_ms or 'n/a' }} ms</dd></div>
+                    <div><dt>Transfer</dt><dd>{{ result.performance.total_transfer_bytes }} bytes</dd></div>
+                    <div><dt>Requests</dt><dd>{{ result.performance.total_requests }}</dd></div>
+                </dl>
+            </article>
+        </section>
+
+        <section class="panel three-column">
+            <article>
+                <h2>Cookies</h2>
+                <div class="table-shell">
+                    <table>
+                        <thead>
+                            <tr><th>Name</th><th>Domain</th><th>Lifespan</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for cookie in result.cookies[:12] %}
+                            <tr>
+                                <td>{{ cookie.name }}</td>
+                                <td>{{ cookie.domain }}</td>
+                                <td>{{ cookie.lifespan }}</td>
+                                <td>{{ cookie.purpose }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+            <article>
+                <h2>Fingerprinting</h2>
+                <div class="finding-list compact">
+                    {% for finding in result.fingerprint_findings %}
+                    <div class="finding-card severity-{{ finding.severity }}">
+                        <strong>{{ finding.technique }}</strong>
+                        <p title="{{ finding.evidence }}">{{ finding.evidence[:120] }}{% if finding.evidence|length > 120 %}&hellip;{% endif %}</p>
+                    </div>
+                    {% else %}
+                    <p class="empty-state">No fingerprinting indicators detected.</p>
+                    {% endfor %}
+                </div>
+            </article>
+            <article>
+                <h2>Top Domains</h2>
+                <div class="table-shell">
+                    <table>
+                        <thead>
+                            <tr><th>Domain</th><th>Req.</th><th>IP(s)</th><th>Org / ISP</th><th>Countries</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for flow in result.domain_flows[:12] %}
+                            <tr{% if flow.gov_label %} class="gov-row"{% endif %}>
+                                <td>
+                                    {{ flow.domain }}
+                                    {% if flow.gov_label %}<br><span class="gov-badge">State</span>{% endif %}
+                                    {% if flow.tracker_category %}<br><span class="tracker-badge tracker-{{ flow.tracker_category }}">{{ flow.tracker_name or flow.tracker_category }}</span>{% endif %}
+                                </td>
+                                <td>{{ flow.request_count }}</td>
+                                <td class="ip-cell">{{ flow.ip_addresses | join('<br>') | safe if flow.ip_addresses else 'n/a' }}</td>
+                                <td class="muted-text">{{ flow.orgs | join(', ') if flow.orgs else '&mdash;' }}</td>
+                                <td>{{ ', '.join(flow.countries) if flow.countries else 'n/a' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        {% if result.tls_record %}
+        <section class="panel tls-section">
+            <div class="tls-header">
+                <div>
+                    <h2>TLS / Certificate Analysis</h2>
+                    <p class="tls-meta">
+                        {{ result.tls_record.host }}:{{ result.tls_record.port }}
+                        &nbsp;&mdash;&nbsp;
+                        <span class="tls-version tls-v-{{ (result.tls_record.tls_version or 'unknown') | replace('.', '') | lower }}">{{ result.tls_record.tls_version or 'unknown' }}</span>
+                        {% if result.tls_record.cipher_name %}&nbsp;&middot;&nbsp;{{ result.tls_record.cipher_name }}{% if result.tls_record.cipher_bits %} ({{ result.tls_record.cipher_bits }}-bit){% endif %}{% endif %}
+                    </p>
+                </div>
+                <span class="sec-grade grade-{{ result.tls_record.grade | lower | replace('+', '-plus') }} sec-grade-lg">{{ result.tls_record.grade }}</span>
+            </div>
+            {% if result.tls_record.error %}
+            <p class="tls-error">{{ result.tls_record.error }}</p>
+            {% endif %}
+            <div class="tls-body">
+                <dl class="tls-details">
+                    {% if result.tls_record.subject_cn %}
+                    <div><dt>Subject CN</dt><dd>{{ result.tls_record.subject_cn }}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.issuer_org %}
+                    <div><dt>Issued by</dt><dd>{{ result.tls_record.issuer_cn or result.tls_record.issuer_org }}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.not_before %}
+                    <div><dt>Valid from</dt><dd>{{ result.tls_record.not_before }}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.not_after %}
+                    <div><dt>Valid until</dt><dd class="{% if result.tls_record.days_remaining is not none and result.tls_record.days_remaining < 30 %}val-warn{% endif %}">{{ result.tls_record.not_after }}{% if result.tls_record.days_remaining is not none %} &nbsp;<span class="days-pill{% if result.tls_record.days_remaining < 14 %} days-critical{% elif result.tls_record.days_remaining < 30 %} days-warn{% endif %}">{{ result.tls_record.days_remaining }}d</span>{% endif %}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.serial_number %}
+                    <div><dt>Serial</dt><dd class="mono-small">{{ result.tls_record.serial_number }}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.san_domains %}
+                    <div><dt>SANs ({{ result.tls_record.san_domains | length }})</dt><dd>{% for san in result.tls_record.san_domains[:6] %}<span class="san-pill">{{ san }}</span>{% endfor %}{% if result.tls_record.san_domains | length > 6 %}<span class="san-pill muted">+{{ result.tls_record.san_domains | length - 6 }} more</span>{% endif %}</dd></div>
+                    {% endif %}
+                    {% if result.tls_record.fingerprint_sha256 %}
+                    <div class="fp-row"><dt>SHA-256</dt><dd class="mono-small">{{ result.tls_record.fingerprint_sha256 }}</dd></div>
+                    {% endif %}
+                </dl>
+                <div class="tls-findings">
+                    {% for f in result.tls_record.findings %}
+                    <div class="tls-finding sev-{{ f.severity }}">
+                        <span class="tls-finding-title">{{ f.title }}</span>
+                        <span class="tls-finding-detail">{{ f.detail }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.js_vulns %}
+        <section class="panel jsvuln-section">
+            <h2>JavaScript Library Vulnerabilities</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">{{ result.js_vulns | length }} CVE(s) detected across {{ result.js_vulns | map(attribute='library') | unique | list | length }} librar(y/ies). Update the affected packages to the indicated fix version.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Library</th><th>Detected</th><th>Fix</th><th>Severity</th><th>CVE / Advisory</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for v in result.js_vulns %}
+                        <tr>
+                            <td><strong>{{ v.library }}</strong></td>
+                            <td class="ip-cell vuln-ver">{{ v.version }}</td>
+                            <td class="ip-cell fix-ver">&ge;{{ v.fix_version }}</td>
+                            <td><span class="vuln-sev sev-{{ v.severity }}">{{ v.severity }}</span></td>
+                            <td><a class="cve-link" href="https://nvd.nist.gov/vuln/detail/{{ v.cve }}" target="_blank" rel="noopener noreferrer">{{ v.cve }}</a></td>
+                            <td class="muted-text vuln-desc">{{ v.description }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% set gov_flows = result.domain_flows | selectattr('gov_label') | list %}
+        {% if gov_flows %}
+        <section class="panel gov-section">
+            <h2>Government / State Infrastructure Connections</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">The following domains resolved to government or state-affiliated infrastructure. Any connection to these domains by the scanned website is flagged as high risk.</p>
+            <div class="finding-list">
+                {% for flow in gov_flows %}
+                <div class="gov-connection-card">
+                    <div>
+                        <div class="gov-domain">{{ flow.domain }}</div>
+                        <div class="gov-reason">{{ flow.gov_label }}</div>
+                        {% if flow.orgs %}
+                        <div class="gov-reason" style="margin-top:0.2rem;">{{ flow.orgs | join(', ') }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="gov-meta">
+                        <div>{{ flow.request_count }} requests</div>
+                        {% for ip in flow.ip_addresses %}
+                        <div class="gov-ip">{{ ip }}</div>
+                        {% endfor %}
+                        {% if flow.countries %}
+                        <div style="margin-top:0.3rem;">{{ ', '.join(flow.countries) }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.header_findings %}
+        <section class="panel header-section">
+            <div class="header-section-title">
+                <h2>Security Headers</h2>
+                <span class="sec-grade grade-{{ result.security_grade | lower | replace('+', '-plus') }} sec-grade-lg">{{ result.security_grade }}</span>
+            </div>
+            <div class="finding-list">
+                {% for hf in result.header_findings %}
+                <div class="finding-card severity-{{ hf.severity }}">
+                    <div class="finding-topline">
+                        <strong>{{ hf.header }}</strong>
+                        <span class="header-status status-{{ hf.status }}">{{ hf.status | upper }}</span>
+                    </div>
+                    <p>{{ hf.detail }}</p>
+                    {% if hf.value %}
+                    <code class="header-value">{{ hf.value }}</code>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% set gov_ip_records = result.ip_intel | selectattr('gov_confidence', 'in', ['confirmed', 'probable', 'possible']) | list %}
+        {% if gov_ip_records %}
+        <section class="panel gov-obs-section">
+            <h2>Government Infrastructure Observer</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">These IPs were matched against government or military infrastructure. Since this is a passive client-side scan, these are servers the website actively communicates with &mdash; not incoming visitors. Server-side visitor logs are not accessible from an external scan.</p>
+            <div class="gov-obs-grid">
+                {% for rec in gov_ip_records %}
+                <div class="gov-obs-card conf-{{ rec.gov_confidence }}">
+                    <div class="gov-obs-header">
+                        <span class="gov-obs-ip">{{ rec.ip }}</span>
+                        <span class="gov-obs-conf conf-pill-{{ rec.gov_confidence }}">{{ rec.gov_confidence | upper }}</span>
+                    </div>
+                    <div class="gov-obs-label">{{ rec.gov_label }}</div>
+                    {% if rec.rdns %}
+                    <div class="gov-obs-detail"><span class="detail-key">rDNS</span> <span class="detail-val">{{ rec.rdns }}</span></div>
+                    {% endif %}
+                    {% if rec.asn %}
+                    <div class="gov-obs-detail"><span class="detail-key">ASN</span> <span class="detail-val">{{ rec.asn }}{% if rec.asname %} &mdash; {{ rec.asname }}{% endif %}</span></div>
+                    {% endif %}
+                    {% if rec.org %}
+                    <div class="gov-obs-detail"><span class="detail-key">Org</span> <span class="detail-val">{{ rec.org }}</span></div>
+                    {% endif %}
+                    <div class="gov-obs-footer">
+                        {% if rec.country %}<span class="detail-tag">{{ rec.country }}</span>{% endif %}
+                        {% for tag in rec.tags %}<span class="detail-tag tag-{{ tag }}">{{ tag }}</span>{% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.ip_intel %}
+        <section class="panel ip-intel-section">
+            <h2>IP Intelligence &mdash; all connected IPs</h2>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>IP</th><th>Type</th><th>rDNS</th><th>ASN</th><th>Org / ISP</th><th>Country</th><th>Gov Classification</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in result.ip_intel %}
+                        <tr{% if rec.gov_label %} class="gov-ip-row"{% endif %}>
+                            <td class="ip-cell">{{ rec.ip }}</td>
+                            <td><span class="ip-type-badge type-{{ rec.ip_type | replace('/', '-') | replace(' ', '-') }}">{{ rec.ip_type }}</span></td>
+                            <td class="muted-text rdns-cell">{{ rec.rdns or '&mdash;' }}</td>
+                            <td class="ip-cell">{{ rec.asn or '&mdash;' }}{% if rec.asname %}<br><span class="muted-text" style="font-size:0.75rem;">{{ rec.asname }}</span>{% endif %}</td>
+                            <td class="muted-text">{{ rec.org or '&mdash;' }}</td>
+                            <td>{{ rec.country or '&mdash;' }}</td>
+                            <td>
+                                {% if rec.gov_label %}
+                                <span class="gov-intel-label">{{ rec.gov_label }}</span>
+                                <span class="conf-pill-{{ rec.gov_confidence }}" style="margin-left:0.4rem;">{{ rec.gov_confidence }}</span>
+                                {% else %}
+                                <span class="muted-text">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="panel">
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>URL</th><th>Depth</th><th>Status</th><th>Title</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for page in result.pages %}
+                        <tr>
+                            <td>{{ page.url }}</td>
+                            <td>{{ page.depth }}</td>
+                            <td>{{ page.status_code or 'n/a' }}</td>
+                            <td>{{ page.title or 'n/a' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

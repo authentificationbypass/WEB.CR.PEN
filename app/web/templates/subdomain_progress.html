@@ -1,0 +1,48 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enumeration in Progress &ndash; {{ job.target_domain }}</title>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <main class="page-shell narrow">
+        <nav class="top-nav">
+            <a href="/enum/">&larr; Subdomain Enumerator</a>
+        </nav>
+        <section class="panel scan-panel">
+            <p class="eyebrow">Enumeration in Progress</p>
+            <h1>{{ job.target_domain }}</h1>
+            <div class="scan-progress" id="progress-area">
+                <div class="pulse"></div>
+                <div>
+                    <p class="status-line">Status: <strong id="status-text">{{ job.status.value }}</strong></p>
+                    <p id="progress-msg">{{ job.progress_message }}</p>
+                    {% if job.error %}
+                    <p class="error-message">{{ job.error }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="/enum/" class="text-link">Back to Overview</a>
+        </section>
+    </main>
+    <script>
+        const jobId = "{{ job.id }}";
+        async function poll() {
+            try {
+                const resp = await fetch(`/enum/api/jobs/${jobId}`);
+                const data = await resp.json();
+                document.getElementById("status-text").textContent = data.status;
+                document.getElementById("progress-msg").textContent = data.progress_message || "";
+                if (data.status === "completed" || data.status === "failed") {
+                    window.location.reload();
+                    return;
+                }
+            } catch (_) {}
+            setTimeout(poll, 2500);
+        }
+        setTimeout(poll, 2500);
+    </script>
+</body>
+</html>

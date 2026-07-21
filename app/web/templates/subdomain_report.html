@@ -1,0 +1,256 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subdomain Report &ndash; {{ result.target_domain }}</title>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <main class="report-shell">
+        <nav class="top-nav">
+            <a href="/enum/">&larr; New Enumeration</a>
+            <a href="/">Web Crawler</a>
+        </nav>
+
+        <!-- Hero -->
+        <header class="report-hero enum-hero">
+            <div>
+                <p class="eyebrow">Subdomain Enumeration &middot; Completed</p>
+                <h1>{{ result.target_domain }}</h1>
+                <p class="muted-text">{{ result.started_at[:19].replace("T"," ") }} UTC</p>
+            </div>
+            <div class="enum-badge-row">
+                {% if result.high_risk_count > 0 %}
+                <div class="risk-badge risk-high">
+                    <span>High Risk</span>
+                    <strong>{{ result.high_risk_count }}</strong>
+                </div>
+                {% endif %}
+                {% if result.medium_risk_count > 0 %}
+                <div class="risk-badge risk-medium">
+                    <span>Medium Risk</span>
+                    <strong>{{ result.medium_risk_count }}</strong>
+                </div>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <section class="metric-grid">
+            <article class="metric-card">
+                <span>Tested</span>
+                <strong>{{ result.total_tested }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Resolved (DNS)</span>
+                <strong>{{ result.total_resolved }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Live (HTTP/S)</span>
+                <strong>{{ result.live_count }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>From Certificates</span>
+                <strong>{{ result.cert_count }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>From Brute-Force</span>
+                <strong>{{ result.brute_count }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>With Risk Flags</span>
+                <strong>{{ result.high_risk_count + result.medium_risk_count }}</strong>
+            </article>
+        </section>
+
+        <!-- Apex DNS -->
+        <section class="panel two-column">
+            <article>
+                <h2>Apex DNS &mdash; {{ result.target_domain }}</h2>
+                <dl class="definition-grid dns-grid">
+                    <div>
+                        <dt>A Records</dt>
+                        <dd>{{ result.apex_dns.a_records | join(", ") or "&mdash;" }}</dd>
+                    </div>
+                    <div>
+                        <dt>AAAA Records</dt>
+                        <dd>{{ result.apex_dns.aaaa_records | join(", ") or "&mdash;" }}</dd>
+                    </div>
+                    <div>
+                        <dt>NS Records</dt>
+                        <dd>{{ result.apex_dns.ns_records | join(", ") or "&mdash;" }}</dd>
+                    </div>
+                    <div>
+                        <dt>MX Records</dt>
+                        <dd>{{ result.apex_dns.mx_records | join(", ") or "&mdash;" }}</dd>
+                    </div>
+                    <div>
+                        <dt>DNSSEC</dt>
+                        <dd class="{{ 'text-good' if result.apex_dns.has_dnssec else 'text-warn' }}">
+                            {{ "Active" if result.apex_dns.has_dnssec else "Not active" }}
+                        </dd>
+                    </div>
+                </dl>
+            </article>
+            <article>
+                <h2>SPF / DMARC / TXT</h2>
+                {% if result.apex_dns.spf %}
+                <div class="dns-record-card">
+                    <strong>SPF</strong>
+                    <code>{{ result.apex_dns.spf }}</code>
+                </div>
+                {% endif %}
+                {% if result.apex_dns.dmarc %}
+                <div class="dns-record-card">
+                    <strong>DMARC</strong>
+                    <code>{{ result.apex_dns.dmarc }}</code>
+                </div>
+                {% endif %}
+                {% if not result.apex_dns.spf and not result.apex_dns.dmarc %}
+                <p class="empty-state">No SPF or DMARC record found &mdash; email spoofing may be possible.</p>
+                {% endif %}
+                {% if result.apex_dns.txt_records %}
+                <div class="txt-records">
+                    {% for txt in result.apex_dns.txt_records[:8] %}
+                    <code class="txt-entry">{{ txt[:120] }}{% if txt|length > 120 %}&hellip;{% endif %}</code>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </article>
+        </section>
+
+        <!-- Risk Findings -->
+        {% set risky = result.subdomains | selectattr("risk_flags") | list %}
+        {% if risky %}
+        <section class="panel">
+            <h2>Risk Findings ({{ risky | length }})</h2>
+            <div class="finding-list">
+                {% for sub in risky | sort(attribute="risk_severity", reverse=true) %}
+                <div class="finding-card severity-{{ sub.risk_severity }}">
+                    <div class="finding-topline">
+                        <strong>{{ sub.subdomain }}</strong>
+                        <span class="severity-badge severity-{{ sub.risk_severity }}">{{ sub.risk_severity }}</span>
+                    </div>
+                    <p>{{ sub.risk_flags | join(" &middot; ") }}</p>
+                    {% if sub.ip_addresses %}
+                    <p class="finding-meta">IPs: {{ sub.ip_addresses | join(", ") }}
+                        {% if sub.country %} &middot; {{ sub.country }}{% endif %}
+                        {% if sub.http_title %} &middot; "{{ sub.http_title }}"{% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Subdomain Table -->
+        <section class="panel">
+            <div class="table-header-row">
+                <h2>All Resolved Subdomains ({{ result.total_resolved }})</h2>
+                <div class="table-controls">
+                    <input id="sub-filter" type="text" placeholder="Filter..." class="filter-input">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="live-only"> Live only
+                    </label>
+                </div>
+            </div>
+            <div class="table-shell">
+                <table id="sub-table">
+                    <thead>
+                        <tr>
+                            <th>Subdomain</th>
+                            <th>IPs</th>
+                            <th>HTTPS</th>
+                            <th>HTTP</th>
+                            <th>Title</th>
+                            <th>Server / CDN</th>
+                            <th>Country</th>
+                            <th>Source</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in result.subdomains %}
+                        <tr class="sub-row {{ 'row-live' if sub.is_live else 'row-dead' }}"
+                            data-live="{{ 'true' if sub.is_live else 'false' }}">
+                            <td class="sub-name">
+                                {% if sub.is_live %}
+                                <a href="https://{{ sub.subdomain }}" target="_blank" rel="noopener">{{ sub.subdomain }}</a>
+                                {% else %}
+                                {{ sub.subdomain }}
+                                {% endif %}
+                                {% if sub.cname %}
+                                <br><small class="muted-text">CNAME &rarr; {{ sub.cname }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="ips-cell">
+                                {% for ip in sub.ip_addresses[:3] %}
+                                <span class="ip-tag">{{ ip }}</span>
+                                {% endfor %}
+                                {% if sub.ip_addresses | length > 3 %}
+                                <span class="ip-tag muted">+{{ sub.ip_addresses | length - 3 }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if sub.https_status %}
+                                <span class="http-status status-{{ (sub.https_status // 100) }}xx">{{ sub.https_status }}</span>
+                                {% else %}&mdash;{% endif %}
+                            </td>
+                            <td>
+                                {% if sub.http_status %}
+                                <span class="http-status status-{{ (sub.http_status // 100) }}xx">{{ sub.http_status }}</span>
+                                {% else %}&mdash;{% endif %}
+                            </td>
+                            <td class="title-cell">
+                                {{ sub.http_title or "&mdash;" }}
+                                {% if sub.redirect_to %}
+                                <br><small class="muted-text">&rarr; {{ sub.redirect_to[:60] }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if sub.cdn %}
+                                <span class="cdn-tag">{{ sub.cdn }}</span><br>
+                                {% endif %}
+                                <small class="muted-text">{{ sub.server or "&mdash;" }}</small>
+                            </td>
+                            <td>{{ sub.country or "&mdash;" }}</td>
+                            <td>
+                                {% for src in sub.sources %}
+                                <span class="source-tag source-{{ src }}">{{ src }}</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% for flag in sub.risk_flags %}
+                                <span class="risk-tag severity-{{ sub.risk_severity }}">{{ flag }}</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const filterInput = document.getElementById('sub-filter');
+        const liveOnly = document.getElementById('live-only');
+        const rows = document.querySelectorAll('.sub-row');
+
+        function applyFilter() {
+            const q = filterInput.value.toLowerCase();
+            const onlyLive = liveOnly.checked;
+            rows.forEach(row => {
+                const matchText = !q || row.textContent.toLowerCase().includes(q);
+                const matchLive = !onlyLive || row.dataset.live === 'true';
+                row.style.display = (matchText && matchLive) ? '' : 'none';
+            });
+        }
+
+        filterInput.addEventListener('input', applyFilter);
+        liveOnly.addEventListener('change', applyFilter);
+    </script>
+</body>
+</html>

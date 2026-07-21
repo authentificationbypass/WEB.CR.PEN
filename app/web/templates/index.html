@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pentesting Web-Crawler</title>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <main class="page-shell">
+        <nav class="top-nav">
+            <span class="nav-active">Web Crawler</span>
+            <a href="/enum/">Subdomain Enumerator &rarr;</a>
+        </nav>
+
+        <section class="hero">
+            <p class="eyebrow">Website Tracking and Security Review</p>
+            <h1>Analyze cookies, data flows, fingerprinting and risk locally.</h1>
+            <p class="lede">Start a scan against a target URL. The crawler follows internal links, collects network data, evaluates tracking indicators and visualizes the results.</p>
+            <form action="/scan" method="post" class="scan-form">
+                <label for="target_url">URL</label>
+                <div class="input-row">
+                    <input id="target_url" name="target_url" type="text" placeholder="https://example.com" required>
+                    <button type="submit">Start Scan</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="jobs-panel">
+            <div class="panel-header">
+                <h2>Recent Jobs</h2>
+            </div>
+            {% if jobs %}
+            <div class="job-list">
+                {% for job in jobs %}
+                <a class="job-card" href="/jobs/{{ job.id }}">
+                    <div style="min-width:0; flex:1;">
+                        <strong>{{ job.target_url }}</strong>
+                        <p>{{ job.progress_message }}</p>
+                    </div>
+                    <span class="status status-{{ job.status.value }}">{{ job.status.value }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-state">No scans started yet.</p>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

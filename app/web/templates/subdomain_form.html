@@ -1,0 +1,84 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subdomain Enumerator</title>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <main class="page-shell">
+        <nav class="top-nav">
+            <a href="/">&larr; Web Crawler</a>
+            <span class="nav-active">Subdomain Enumerator</span>
+        </nav>
+
+        <section class="hero">
+            <p class="eyebrow">Reconnaissance &middot; DNS Intelligence</p>
+            <h1>Subdomain Enumerator</h1>
+            <p class="lede">
+                Combines Certificate Transparency logs (crt.sh), DNS brute-force with ~380 prefixes,
+                HTTP/HTTPS probing, IP geolocation and automatic risk detection.
+            </p>
+            <form action="/enum/" method="post" class="scan-form">
+                <label for="target">Target domain (e.g. <code>example.com</code>)</label>
+                <div class="input-row">
+                    <input id="target" name="target" type="text"
+                           placeholder="example.com" required autocomplete="off" spellcheck="false">
+                    <button type="submit">Start Enumeration</button>
+                </div>
+            </form>
+            <p class="disclaimer">
+                Only use against domains you have explicit authorization to test.
+            </p>
+        </section>
+
+        <section class="panel technique-grid">
+            <h2>Techniques Used</h2>
+            <div class="technique-list">
+                <div class="technique-card">
+                    <strong>Certificate Transparency</strong>
+                    <p>Public CT logs via crt.sh &mdash; discovers historically issued TLS certificates for all subdomains.</p>
+                </div>
+                <div class="technique-card">
+                    <strong>DNS Brute-Force</strong>
+                    <p>~380 common subdomain prefixes resolved in parallel via DNS (A, AAAA, CNAME).</p>
+                </div>
+                <div class="technique-card">
+                    <strong>HTTP/HTTPS Probing</strong>
+                    <p>Every resolved subdomain is checked for active web services &mdash; status code, title, server header.</p>
+                </div>
+                <div class="technique-card">
+                    <strong>IP Geolocation</strong>
+                    <p>Unique IP addresses are mapped to country and organization.</p>
+                </div>
+                <div class="technique-card">
+                    <strong>Apex DNS Records</strong>
+                    <p>A, AAAA, NS, MX, TXT, SPF, DMARC and DNSSEC status of the root domain.</p>
+                </div>
+                <div class="technique-card">
+                    <strong>Risk Detection</strong>
+                    <p>Admin panels, CI/CD systems, databases, dev environments and more are automatically flagged.</p>
+                </div>
+            </div>
+        </section>
+
+        {% if jobs %}
+        <section class="jobs-panel">
+            <div class="panel-header"><h2>Recent Enumerations</h2></div>
+            <div class="job-list">
+                {% for job in jobs %}
+                <a class="job-card" href="/enum/jobs/{{ job.id }}">
+                    <div>
+                        <strong>{{ job.target_domain }}</strong>
+                        <p>{{ job.progress_message }}</p>
+                    </div>
+                    <span class="status status-{{ job.status.value }}">{{ job.status.value }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>
