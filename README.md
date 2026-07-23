@@ -35,9 +35,6 @@ python -m venv .venv
 # Install dependencies
 pip install -e .
 
-# Install Playwright Chromium
-python -m playwright install chromium
-```
 
 ## Usage
 
@@ -65,22 +62,3 @@ Open `http://127.0.0.1:8000` in your browser.
 | `CYBERSEC_GEOLOCATION_API_BASE` | `http://ip-api.com/json` | Geo lookup API |
 | `CYBERSEC_PROXY_SERVER` | *(unset)* | Optional HTTP proxy |
 | `CYBERSEC_USER_AGENT` | `PentestingWebCrawler/0.1` | Browser user agent |
-
-## Running Tests
-
-```powershell
-python -m pytest
-# verbose output:
-python -m pytest -v
-```
-
-## Database
-
-SQLite database stored at `./data/scans.db`, created automatically on first run. Stores jobs, status and full scan results.
-
-## Notes
-
-- Geo lookups use ip-api.com. Rate limits apply; not intended for high-volume production use.
-- Some websites block headless browsers or serve different content to automated clients.
-- Crawl limits (pages/depth) are intentionally conservative. Adjust via environment variables for deeper analysis.
-- Only use this tool against targets you have explicit authorization to test.
