@@ -136,6 +136,60 @@ class JsVulnFinding:
 
 
 @dataclass(slots=True)
+class CmsComponent:
+    cms: str
+    component_type: str
+    component_name: str
+    slug: str
+    version: str | None
+    source: str
+    confidence: str
+
+
+@dataclass(slots=True)
+class CmsVulnFinding:
+    cms: str
+    component_type: str
+    component_name: str
+    slug: str
+    version: str
+    cve: str
+    severity: str
+    description: str
+    fixed_in: str
+    source: str
+
+
+@dataclass(slots=True)
+class ExposedEndpointFinding:
+    category: str
+    name: str
+    url: str
+    severity: str
+    rationale: str
+    source: str
+    status_code: int | None = None
+    confidence: str = "low"
+    evidence: str | None = None
+    remediation: str | None = None
+    verified: bool = False
+
+
+@dataclass(slots=True)
+class SecurityAuditFinding:
+    area: str
+    category: str
+    title: str
+    severity: str
+    endpoint: str | None
+    evidence: str
+    remediation: str
+    status_code: int | None = None
+    confidence: str = "medium"
+    compliance: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class DomainFlow:
     domain: str
     request_count: int
@@ -198,6 +252,10 @@ class ScanResult:
     ip_intel: list[IpIntelRecord] = field(default_factory=list)
     tls_record: TlsRecord | None = None
     js_vulns: list[JsVulnFinding] = field(default_factory=list)
+    cms_components: list[CmsComponent] = field(default_factory=list)
+    cms_vulns: list[CmsVulnFinding] = field(default_factory=list)
+    exposed_endpoints: list[ExposedEndpointFinding] = field(default_factory=list)
+    security_findings: list[SecurityAuditFinding] = field(default_factory=list)
 
 
 @dataclass(slots=True)

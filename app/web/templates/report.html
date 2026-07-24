@@ -63,7 +63,55 @@
                 <span>JS CVEs</span>
                 <strong>{{ result.summary.get('js_vulns_detected', 0) }}</strong>
             </article>
+            <article class="metric-card">
+                <span>CMS Components</span>
+                <strong>{{ result.summary.get('cms_components_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('cms_vulns_detected', 0) > 0 %} metric-warn{% endif %}">
+                <span>CMS CVEs</span>
+                <strong>{{ result.summary.get('cms_vulns_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card">
+                <span>Plugin Versions</span>
+                <strong>{{ result.summary.get('plugin_versions_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('exposed_endpoints_detected', 0) > 0 %} metric-alert{% endif %}">
+                <span>Sensitive Endpoints</span>
+                <strong>{{ result.summary.get('exposed_endpoints_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('sensitive_files_detected', 0) > 0 %} metric-alert{% endif %}">
+                <span>Sensitive Files</span>
+                <strong>{{ result.summary.get('sensitive_files_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('verified_exposed_endpoints', 0) > 0 %} metric-alert{% endif %}">
+                <span>Verified Exposures</span>
+                <strong>{{ result.summary.get('verified_exposed_endpoints', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('hardening_issues_detected', 0) > 0 %} metric-warn{% endif %}">
+                <span>Hardening Issues</span>
+                <strong>{{ result.summary.get('hardening_issues_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('auth_session_issues_detected', 0) > 0 %} metric-alert{% endif %}">
+                <span>Auth/Session</span>
+                <strong>{{ result.summary.get('auth_session_issues_detected', 0) }}</strong>
+            </article>
+            <article class="metric-card{% if result.summary.get('api_issues_detected', 0) > 0 %} metric-warn{% endif %}">
+                <span>API Issues</span>
+                <strong>{{ result.summary.get('api_issues_detected', 0) }}</strong>
+            </article>
         </section>
+
+        {% set plugin_components = result.cms_components | selectattr('component_type', 'equalto', 'plugin') | selectattr('version') | list %}
+        {% if plugin_components %}
+        <section class="panel">
+            <h2>Plugin Version Overview</h2>
+            <div class="chip-row">
+                {% for plugin in plugin_components[:20] %}
+                <span class="tracker-badge tracker-analytics">{{ plugin.component_name }} {{ plugin.version }}</span>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
 
         <section class="panel two-column">
             <article>
@@ -232,8 +280,179 @@
                             <td class="ip-cell vuln-ver">{{ v.version }}</td>
                             <td class="ip-cell fix-ver">&ge;{{ v.fix_version }}</td>
                             <td><span class="vuln-sev sev-{{ v.severity }}">{{ v.severity }}</span></td>
-                            <td><a class="cve-link" href="https://nvd.nist.gov/vuln/detail/{{ v.cve }}" target="_blank" rel="noopener noreferrer">{{ v.cve }}</a></td>
+                            <td>
+                                <a class="cve-link" href="https://nvd.nist.gov/vuln/detail/{{ v.cve }}" target="_blank" rel="noopener noreferrer">{{ v.cve }}</a>
+                            </td>
                             <td class="muted-text vuln-desc">{{ v.description }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.cms_components %}
+        <section class="panel">
+            <h2>Detected CMS Components</h2>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>CMS</th><th>Type</th><th>Component</th><th>Version</th><th>Confidence</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for comp in result.cms_components %}
+                        <tr>
+                            <td>{{ comp.cms|upper }}</td>
+                            <td>{{ comp.component_type }}</td>
+                            <td>{{ comp.component_name }}</td>
+                            <td>{{ comp.version or 'unknown' }}</td>
+                            <td>{{ comp.confidence }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.cms_vulns %}
+        <section class="panel">
+            <h2>CMS / Plugin Vulnerabilities</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">{{ result.cms_vulns | length }} CVE(s) mapped against detected CMS versions and plugin versions.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Component</th><th>Type</th><th>Detected</th><th>Fixed in</th><th>Severity</th><th>CVE</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for v in result.cms_vulns %}
+                        <tr>
+                            <td><strong>{{ v.component_name }}</strong></td>
+                            <td>{{ v.component_type }}</td>
+                            <td class="ip-cell vuln-ver">{{ v.version }}</td>
+                            <td class="ip-cell fix-ver">&ge;{{ v.fixed_in }}</td>
+                            <td><span class="vuln-sev sev-{{ v.severity }}">{{ v.severity }}</span></td>
+                            <td>
+                                <a class="cve-link" href="https://nvd.nist.gov/vuln/detail/{{ v.cve }}" target="_blank" rel="noopener noreferrer">{{ v.cve }}</a>
+                            </td>
+                            <td class="muted-text vuln-desc">{{ v.description }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.exposed_endpoints %}
+        <section class="panel">
+            <h2>Sensitive File / Endpoint Discovery</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">{{ result.exposed_endpoints | length }} potentially sensitive path(s) were identified. {{ result.summary.get('verified_exposed_endpoints', 0) }} finding(s) were actively verified by direct HTTP probing.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Category</th><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Evidence</th><th>Recommended Fix</th><th>URL</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in result.exposed_endpoints %}
+                        <tr>
+                            <td>{{ f.category }}</td>
+                            <td>
+                                <strong>{{ f.name }}</strong><br>
+                                <span class="muted-text">{{ f.rationale }}</span>
+                            </td>
+                            <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                            <td>{% if f.status_code is not none %}{{ f.status_code }}{% else %}n/a{% endif %} {% if f.verified %}<span class="tracker-badge tracker-advertising">verified</span>{% endif %}</td>
+                            <td>{{ f.confidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.evidence or 'Pattern-based detection; no content proof yet.' }}</td>
+                            <td class="muted-text vuln-desc">{{ f.remediation or 'Restrict access and harden endpoint exposure.' }}</td>
+                            <td class="ip-cell">{{ f.url }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if result.security_findings %}
+        <section class="panel">
+            <h2>Active Security Hardening Audit</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">This section combines active checks for endpoint headers/TLS hardening, auth/session controls, and API baseline exposures.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Area</th><th>Category</th><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in result.security_findings %}
+                        <tr>
+                            <td>{{ f.area }}</td>
+                            <td>{{ f.category }}</td>
+                            <td>
+                                <strong>{{ f.title }}</strong>
+                                {% if f.endpoint %}<br><span class="muted-text">{{ f.endpoint }}</span>{% endif %}
+                            </td>
+                            <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                            <td>{% if f.status_code is not none %}{{ f.status_code }}{% else %}n/a{% endif %}</td>
+                            <td>{{ f.confidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.compliance | join(', ') if f.compliance else 'n/a' }}</td>
+                            <td class="muted-text vuln-desc">{{ f.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.remediation }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if compliance_summary %}
+        <section class="panel">
+            <h2>Compliance Mapping (OWASP / ASVS)</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">Security findings are mapped to common OWASP and ASVS controls to simplify reporting and remediation tracking.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Control</th><th>Mapped Findings</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for control, count in compliance_summary %}
+                        <tr>
+                            <td>{{ control }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% set auth_findings = result.security_findings | selectattr('area', 'equalto', 'auth-session') | list %}
+        {% if auth_findings %}
+        <section class="panel" id="auth-session-details">
+            <h2>Auth / Session Details</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">{{ auth_findings | length }} finding(s) explain why the Auth/Session counter is elevated.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in auth_findings %}
+                        <tr>
+                            <td>
+                                <strong>{{ f.title }}</strong>
+                                {% if f.endpoint %}<br><span class="muted-text">{{ f.endpoint }}</span>{% endif %}
+                            </td>
+                            <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                            <td>{% if f.status_code is not none %}{{ f.status_code }}{% else %}n/a{% endif %}</td>
+                            <td>{{ f.confidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.compliance | join(', ') if f.compliance else 'n/a' }}</td>
+                            <td class="muted-text vuln-desc">{{ f.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.remediation }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -378,6 +597,12 @@
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <section class="panel report-export-panel">
+            <h2>Export Report</h2>
+            <p class="lede" style="margin-bottom:1rem;">Download a structured PDF with all findings, scores, evidence, and remediation notes for later reporting.</p>
+            <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">Download PDF Report</a>
         </section>
     </main>
 </body>

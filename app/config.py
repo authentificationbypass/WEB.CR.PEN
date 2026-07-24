@@ -17,6 +17,12 @@ class Settings:
     max_depth: int = int(os.getenv("CYBERSEC_MAX_DEPTH", "2"))
     page_timeout_ms: int = int(os.getenv("CYBERSEC_PAGE_TIMEOUT_MS", "20000"))
     request_timeout_seconds: float = float(os.getenv("CYBERSEC_REQUEST_TIMEOUT_SECONDS", "8"))
+    active_endpoint_probe_enabled: bool = os.getenv("CYBERSEC_ACTIVE_ENDPOINT_PROBE_ENABLED", "1") not in ("0", "false", "False")
+    active_endpoint_probe_limit: int = int(os.getenv("CYBERSEC_ACTIVE_ENDPOINT_PROBE_LIMIT", "24"))
+    active_endpoint_probe_concurrency: int = int(os.getenv("CYBERSEC_ACTIVE_ENDPOINT_PROBE_CONCURRENCY", "6"))
+    active_security_endpoint_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_ENDPOINT_LIMIT", "14"))
+    active_security_api_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_API_LIMIT", "10"))
+    active_security_probe_concurrency: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_PROBE_CONCURRENCY", "6"))
     geolocation_api_base: str = os.getenv("CYBERSEC_GEOLOCATION_API_BASE", "http://ip-api.com/json")
     proxy_server: str | None = os.getenv("CYBERSEC_PROXY_SERVER") or None
     user_agent: str = os.getenv(

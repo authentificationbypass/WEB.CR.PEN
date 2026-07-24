@@ -296,6 +296,32 @@ button:active {
     font-size: 0.84rem;
 }
 
+.job-metrics,
+.job-plugin-list,
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+}
+
+.mini-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+
+.mini-badge-soft {
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.02);
+}
+
 .empty-state {
     padding: 2.5rem;
     text-align: center;
@@ -614,6 +640,31 @@ tr:last-child td {
 
 .text-link:hover {
     opacity: 0.7;
+}
+
+.report-export-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--accent-blue) 0%, #2f68c7 100%);
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+
+.download-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(79, 142, 247, 0.35);
+    filter: brightness(1.06);
 }
 
 .error-message {

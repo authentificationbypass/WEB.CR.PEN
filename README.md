@@ -14,6 +14,8 @@ A local Python web application for security analysis of websites. Crawls a targe
 - TLS/SSL certificate inspection: version, cipher, validity, SANs, SHA-256 fingerprint
 - HTTP security header grading (CSP, HSTS, X-Frame-Options, Referrer-Policy, etc.)
 - JavaScript library vulnerability scan (jQuery, Bootstrap, Lodash, Angular, Vue, Axios, etc.)
+- CMS/plugin CVE mapping with detected plugin/core versions
+- Sensitive endpoint discovery with active verification, evidence snippets and remediation hints
 - Explainable risk score across six categories
 - Interactive world map and bar charts (Plotly)
 - Subdomain enumerator: Certificate Transparency + DNS brute-force + HTTP probing + risk flagging
@@ -59,6 +61,9 @@ Open `http://127.0.0.1:8000` in your browser.
 | `CYBERSEC_MAX_DEPTH` | `2` | Max crawl depth |
 | `CYBERSEC_PAGE_TIMEOUT_MS` | `20000` | Page load timeout (ms) |
 | `CYBERSEC_REQUEST_TIMEOUT_SECONDS` | `8` | HTTP request timeout |
+| `CYBERSEC_ACTIVE_ENDPOINT_PROBE_ENABLED` | `1` | Enable active verification probes for sensitive paths |
+| `CYBERSEC_ACTIVE_ENDPOINT_PROBE_LIMIT` | `24` | Maximum active endpoint probes per scan |
+| `CYBERSEC_ACTIVE_ENDPOINT_PROBE_CONCURRENCY` | `6` | Concurrent active verification requests |
 | `CYBERSEC_GEOLOCATION_API_BASE` | `http://ip-api.com/json` | Geo lookup API |
 | `CYBERSEC_PROXY_SERVER` | *(unset)* | Optional HTTP proxy |
 | `CYBERSEC_USER_AGENT` | `PentestingWebCrawler/0.1` | Browser user agent |

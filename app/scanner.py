@@ -3,7 +3,9 @@
 from collections import Counter
 import asyncio
 
+from app.analysis.cms_vulns import analyze_cms_vulnerabilities
 from app.analysis.cookies import analyze_cookies
+from app.analysis.exposed_endpoints import active_probe_exposed_endpoints, analyze_exposed_endpoints
 from app.analysis.fingerprints import detect_fingerprint_findings
 from app.analysis.geo import GeoResolver
 from app.analysis.gov_intel import classify_gov_connection
@@ -11,6 +13,7 @@ from app.analysis.headers import analyze_security_headers
 from app.analysis.ip_intel import classify_ip
 from app.analysis.js_vulns import scan_js_vulnerabilities
 from app.analysis.risk import calculate_risk
+from app.analysis.security_audit import run_security_audit
 from app.analysis.tls import analyze_tls_sync
 from app.analysis.tracker_intel import classify_tracker
 from app.config import settings
@@ -179,6 +182,44 @@ async def run_scan(job: ScanJob) -> None:
         js_vulns = scan_js_vulnerabilities(all_scripts)
         js_vuln_count = len({(v.library, v.cve) for v in js_vulns})
 
+        # CMS / plugin detection + CVE analysis
+        cms_components, cms_vulns = analyze_cms_vulnerabilities(all_requests, all_scripts, main_headers)
+        cms_vuln_count = len({(v.component_name, v.version, v.cve) for v in cms_vulns})
+        plugin_versions_count = len({c.slug for c in cms_components if c.component_type == "plugin" and c.version})
+
+        # Sensitive files / endpoint discovery
+        exposed_endpoints = analyze_exposed_endpoints(all_requests, pages)
+        if settings.active_endpoint_probe_enabled:
+            job.set_status(JobStatus.RUNNING, "Actively verifying sensitive endpoint candidates")
+            exposed_endpoints = await active_probe_exposed_endpoints(
+                target_url=job.target_url,
+                passive_findings=exposed_endpoints,
+                timeout_seconds=settings.request_timeout_seconds,
+                user_agent=settings.user_agent,
+                max_probes=settings.active_endpoint_probe_limit,
+                concurrency=settings.active_endpoint_probe_concurrency,
+            )
+        sensitive_files_count = sum(1 for finding in exposed_endpoints if finding.category == "sensitive-file")
+        verified_exposed_count = sum(1 for finding in exposed_endpoints if finding.verified)
+
+        # Active pentest hardening checks (headers/tls per endpoint, auth/session, API baseline)
+        job.set_status(JobStatus.RUNNING, "Running active security hardening checks")
+        security_findings = await run_security_audit(
+            target_url=job.target_url,
+            pages=pages,
+            requests=all_requests,
+            cookies=cookies,
+            tls_record=tls_record,
+            timeout_seconds=settings.request_timeout_seconds,
+            user_agent=settings.user_agent,
+            endpoint_limit=settings.active_security_endpoint_limit,
+            api_limit=settings.active_security_api_limit,
+            concurrency=settings.active_security_probe_concurrency,
+        )
+        hardening_issue_count = len([f for f in security_findings if f.severity in ("high", "critical")])
+        auth_issue_count = len([f for f in security_findings if f.area == "auth-session"])
+        api_issue_count = len([f for f in security_findings if f.area == "api"])
+
         summary = {
             "pages_scanned": len(pages),
             "requests_observed": len(all_requests),
@@ -189,11 +230,20 @@ async def run_scan(job: ScanJob) -> None:
             "trackers_detected": tracker_count,
             "gov_ips_detected": gov_ip_count,
             "js_vulns_detected": js_vuln_count,
+            "cms_components_detected": len(cms_components),
+            "cms_vulns_detected": cms_vuln_count,
+            "plugin_versions_detected": plugin_versions_count,
+            "exposed_endpoints_detected": len(exposed_endpoints),
+            "sensitive_files_detected": sensitive_files_count,
+            "verified_exposed_endpoints": verified_exposed_count,
+            "hardening_issues_detected": hardening_issue_count,
+            "auth_session_issues_detected": auth_issue_count,
+            "api_issues_detected": api_issue_count,
         }
         header_findings, security_grade = analyze_security_headers(main_headers)
         risk_score, risk_level, risk_findings = calculate_risk(
             all_requests, cookies, all_scripts, fingerprint_findings,
-            domain_flows, header_findings, tls_record, js_vulns
+            domain_flows, header_findings, tls_record, js_vulns, cms_vulns, exposed_endpoints, security_findings
         )
         job.result = ScanResult(
             target_url=job.target_url,
@@ -215,6 +265,10 @@ async def run_scan(job: ScanJob) -> None:
             ip_intel=ip_intel,
             tls_record=tls_record,
             js_vulns=js_vulns,
+            cms_components=cms_components,
+            cms_vulns=cms_vulns,
+            exposed_endpoints=exposed_endpoints,
+            security_findings=security_findings,
         )
     finally:
         if playwright and browser and context:

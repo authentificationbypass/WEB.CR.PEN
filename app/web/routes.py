@@ -14,6 +14,14 @@ from app.jobs.queue import JobQueue
 from app.models import JobStatus, ScanJob, ScanResult
 
 
+def _build_compliance_summary(result: ScanResult) -> list[tuple[str, int]]:
+    counts: dict[str, int] = {}
+    for finding in result.security_findings:
+        for tag in finding.compliance:
+            counts[tag] = counts.get(tag, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
 def _build_bar_chart(domain_flows) -> str:
     figure = go.Figure(
         data=[
@@ -105,6 +113,7 @@ def build_router(templates: Jinja2Templates, queue: JobQueue) -> APIRouter:
                 "result": job.result,
                 "bar_chart": _build_bar_chart(job.result.domain_flows),
                 "country_chart": _build_country_chart(job.result),
+                "compliance_summary": _build_compliance_summary(job.result),
             },
         )
 
@@ -122,5 +131,22 @@ def build_router(templates: Jinja2Templates, queue: JobQueue) -> APIRouter:
         if job.result is not None:
             payload["result"] = asdict(job.result)
         return payload
+
+    @router.get("/jobs/{job_id}/report.pdf")
+    async def job_report_pdf(job_id: str) -> Response:
+        job = queue.get(job_id)
+        if job is None or job.status != JobStatus.COMPLETED or job.result is None:
+            return Response(content="Report not available", status_code=404)
+
+        from app.web.pdf_report import build_scan_report_pdf
+
+        pdf_bytes = build_scan_report_pdf(job, job.result)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="scan-report-{job.id}.pdf"'
+            },
+        )
 
     return router

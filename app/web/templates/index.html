@@ -37,6 +37,25 @@
                     <div style="min-width:0; flex:1;">
                         <strong>{{ job.target_url }}</strong>
                         <p>{{ job.progress_message }}</p>
+                        {% if job.result %}
+                        <div class="job-metrics">
+                            <span class="mini-badge">JS CVEs: {{ job.result.summary.get('js_vulns_detected', 0) }}</span>
+                            <span class="mini-badge">CMS CVEs: {{ job.result.summary.get('cms_vulns_detected', 0) }}</span>
+                            <span class="mini-badge">Sensitive Endpoints: {{ job.result.summary.get('exposed_endpoints_detected', 0) }}</span>
+                            <span class="mini-badge">Verified Exposures: {{ job.result.summary.get('verified_exposed_endpoints', 0) }}</span>
+                        </div>
+                        {% set ov_plugins = job.result.cms_components | selectattr('component_type', 'equalto', 'plugin') | selectattr('version') | list %}
+                        {% if ov_plugins %}
+                        <div class="job-plugin-list">
+                            {% for plugin in ov_plugins[:3] %}
+                            <span class="mini-badge mini-badge-soft">{{ plugin.component_name }} {{ plugin.version }}</span>
+                            {% endfor %}
+                            {% if ov_plugins | length > 3 %}
+                            <span class="mini-badge mini-badge-soft">+{{ ov_plugins | length - 3 }} more</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% endif %}
                     </div>
                     <span class="status status-{{ job.status.value }}">{{ job.status.value }}</span>
                 </a>

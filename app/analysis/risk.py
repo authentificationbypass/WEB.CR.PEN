@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from app.models import CookieRecord, DomainFlow, FingerprintFinding, HeaderFinding, JsVulnFinding, RequestRecord, RiskFinding, ScriptRecord, TlsRecord
+from app.models import CmsVulnFinding, CookieRecord, DomainFlow, ExposedEndpointFinding, FingerprintFinding, HeaderFinding, JsVulnFinding, RequestRecord, RiskFinding, ScriptRecord, SecurityAuditFinding, TlsRecord
 
 
 def calculate_risk(
@@ -14,6 +14,9 @@ def calculate_risk(
     header_findings: list[HeaderFinding] | None = None,
     tls_record: TlsRecord | None = None,
     js_vulns: list[JsVulnFinding] | None = None,
+    cms_vulns: list[CmsVulnFinding] | None = None,
+    exposed_endpoints: list[ExposedEndpointFinding] | None = None,
+    security_findings: list[SecurityAuditFinding] | None = None,
 ) -> tuple[int, str, list[RiskFinding]]:
     findings: list[RiskFinding] = []
     score = 0
@@ -192,6 +195,108 @@ def calculate_risk(
                 f"Outdated JS libraries ({len(js_vulns)} CVE(s))",
                 8,
                 f"{len({v.library for v in js_vulns})} outdated librar(y/ies) detected with medium/low severity CVEs",
+                "medium",
+            ))
+
+    # CMS/plugin vulnerability risk
+    if cms_vulns:
+        critical_or_high = [v for v in cms_vulns if v.severity in ("critical", "high")]
+        affected_components = {v.component_name for v in cms_vulns}
+        if critical_or_high:
+            cms_score = min(35, len(critical_or_high) * 7)
+            score += cms_score
+            findings.append(RiskFinding(
+                "dependencies",
+                f"Outdated CMS components with known CVEs ({len(critical_or_high)} high/critical)",
+                cms_score,
+                f"Affected components: {', '.join(sorted(affected_components)[:4])}",
+                "high",
+            ))
+        else:
+            score += 10
+            findings.append(RiskFinding(
+                "dependencies",
+                f"CMS components with known CVEs ({len(cms_vulns)})",
+                10,
+                f"{len(affected_components)} CMS component(s) have published vulnerabilities",
+                "medium",
+            ))
+
+    # Sensitive files / endpoint exposure risk
+    if exposed_endpoints:
+        verified = [finding for finding in exposed_endpoints if finding.verified]
+        verified_sensitive = [finding for finding in verified if finding.category == "sensitive-file"]
+        verified_debug = [finding for finding in verified if finding.category == "debug-endpoint"]
+        unverified_sensitive = [finding for finding in exposed_endpoints if finding.category == "sensitive-file" and not finding.verified]
+
+        if verified_sensitive:
+            sensitive_score = min(35, len(verified_sensitive) * 12)
+            score += sensitive_score
+            findings.append(RiskFinding(
+                "exposure",
+                f"Sensitive files/endpoints exposed ({len(verified_sensitive)})",
+                sensitive_score,
+                f"Examples: {', '.join(f.url for f in verified_sensitive[:2])}",
+                "critical" if any(f.severity == "critical" for f in verified_sensitive) else "high",
+            ))
+
+        if verified_debug:
+            debug_score = min(15, len(verified_debug) * 5)
+            score += debug_score
+            findings.append(RiskFinding(
+                "exposure",
+                f"Debug/Admin endpoints exposed ({len(verified_debug)})",
+                debug_score,
+                f"Debug-style endpoints discovered in crawl path inventory",
+                "high",
+            ))
+
+        if unverified_sensitive:
+            score += min(5, len(unverified_sensitive))
+            findings.append(RiskFinding(
+                "exposure",
+                f"Potential sensitive paths detected ({len(unverified_sensitive)})",
+                min(5, len(unverified_sensitive)),
+                "These paths matched risky patterns but were not fully confirmed by active probing.",
+                "medium",
+            ))
+
+    # Active security hardening audit risk
+    if security_findings:
+        high_critical = [f for f in security_findings if f.severity in ("high", "critical")]
+        auth_issues = [f for f in security_findings if f.area == "auth-session" and f.severity in ("high", "critical")]
+        api_issues = [f for f in security_findings if f.area == "api" and f.severity in ("high", "critical")]
+
+        if high_critical:
+            sec_score = min(30, len(high_critical) * 4)
+            score += sec_score
+            findings.append(RiskFinding(
+                "hardening",
+                f"Active hardening checks found {len(high_critical)} high/critical issue(s)",
+                sec_score,
+                "Header/TLS, auth/session, or API checks exposed high-impact weaknesses.",
+                "high",
+            ))
+
+        if auth_issues:
+            auth_score = min(15, len(auth_issues) * 5)
+            score += auth_score
+            findings.append(RiskFinding(
+                "auth",
+                f"Authentication/session weaknesses ({len(auth_issues)})",
+                auth_score,
+                "Session cookie or access-control weaknesses increase account takeover risk.",
+                "high",
+            ))
+
+        if api_issues:
+            api_score = min(12, len(api_issues) * 4)
+            score += api_score
+            findings.append(RiskFinding(
+                "api",
+                f"API exposure weaknesses ({len(api_issues)})",
+                api_score,
+                "Public API metadata or sensitive API responses were detected.",
                 "medium",
             ))
 
