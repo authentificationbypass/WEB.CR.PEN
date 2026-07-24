@@ -633,6 +633,26 @@ tr:last-child td {
     background: rgba(21, 27, 41, 0.52);
 }
 
+.panel-flat {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: rgba(21, 27, 41, 0.52) !important;
+}
+
+.panel-flat h2 {
+    font-size: 0.96rem;
+    font-weight: 600;
+    margin-bottom: 0.9rem;
+}
+
+.panel-flat .tracker-badge,
+.panel-flat .gov-badge,
+.panel-flat .risk-badge,
+.panel-flat .metric-card,
+.panel-flat .finding-card {
+    border-radius: 0 !important;
+}
+
 .report-summary {
     margin-top: 1rem;
     padding: 1rem 1.1rem;
@@ -1777,6 +1797,39 @@ tr:last-child td {
     font-family: "IBM Plex Mono", "Consolas", monospace;
     font-size: 0.74rem;
     color: var(--muted);
+    word-break: break-all;
+}
+
+.endpoint-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.endpoint-actions {
+    display: inline-flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.inline-action {
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.18rem 0.45rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.inline-action:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+}
+
+.endpoint-text {
+    display: block;
     word-break: break-all;
 }
 

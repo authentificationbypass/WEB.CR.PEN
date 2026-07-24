@@ -4,6 +4,7 @@ from collections import Counter
 import asyncio
 
 from app.analysis.cms_vulns import analyze_cms_vulnerabilities
+from app.analysis.credential_leaks import analyze_credential_leaks
 from app.analysis.cookies import analyze_cookies
 from app.analysis.exposed_endpoints import active_probe_exposed_endpoints, analyze_exposed_endpoints
 from app.analysis.fingerprints import detect_fingerprint_findings
@@ -12,6 +13,7 @@ from app.analysis.gov_intel import classify_gov_connection
 from app.analysis.headers import analyze_security_headers
 from app.analysis.ip_intel import classify_ip
 from app.analysis.js_vulns import scan_js_vulnerabilities
+from app.analysis.owasp_top5 import analyze_owasp_top5
 from app.analysis.risk import calculate_risk
 from app.analysis.security_audit import run_security_audit
 from app.analysis.tls import analyze_tls_sync
@@ -106,6 +108,7 @@ async def run_scan(job: ScanJob) -> None:
 
         cookies = analyze_cookies(await context.cookies(), registrable_domain(job.target_url))
         fingerprint_findings = detect_fingerprint_findings(all_scripts)
+        credential_leaks = analyze_credential_leaks(all_requests)
 
         # Build per-IP intelligence map
         ip_intel_map: dict[str, object] = {}
@@ -226,6 +229,7 @@ async def run_scan(job: ScanJob) -> None:
             }
         ])
         client_leak_count = len([f for f in security_findings if f.area == "client-leak"])
+        credential_leak_count = len(credential_leaks)
         priority_p1_count = len([f for f in security_findings if f.priority_tier == "P1"])
         priority_p2_count = len([f for f in security_findings if f.priority_tier == "P2"])
 
@@ -250,14 +254,25 @@ async def run_scan(job: ScanJob) -> None:
             "api_issues_detected": api_issue_count,
             "api_profile_findings_detected": api_profile_count,
             "client_leaks_detected": client_leak_count,
+            "credential_leaks_detected": credential_leak_count,
             "priority_p1_detected": priority_p1_count,
             "priority_p2_detected": priority_p2_count,
         }
         header_findings, security_grade = analyze_security_headers(main_headers)
+        owasp_top5 = analyze_owasp_top5(
+            requests=all_requests,
+            cookies=cookies,
+            header_findings=header_findings,
+            tls_record=tls_record,
+            exposed_endpoints=exposed_endpoints,
+            security_findings=security_findings,
+        )
+        owasp_detected_count = sum(1 for item in owasp_top5 if item.detected)
         risk_score, risk_level, risk_findings = calculate_risk(
             all_requests, cookies, all_scripts, fingerprint_findings,
             domain_flows, header_findings, tls_record, js_vulns, cms_vulns, exposed_endpoints, security_findings
         )
+        summary["owasp_top5_detected"] = owasp_detected_count
         job.result = ScanResult(
             target_url=job.target_url,
             started_at=started_at,
@@ -282,6 +297,8 @@ async def run_scan(job: ScanJob) -> None:
             cms_vulns=cms_vulns,
             exposed_endpoints=exposed_endpoints,
             security_findings=security_findings,
+            owasp_top5=owasp_top5,
+            credential_leaks=credential_leaks,
         )
     finally:
         if playwright and browser and context:

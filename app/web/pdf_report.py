@@ -149,6 +149,30 @@ def build_scan_report_pdf(job: ScanJob, result: ScanResult) -> bytes:
         story.append(_table(compliance_rows, [205 * mm, 60 * mm]))
         story.append(Spacer(1, 10))
 
+    if result.credential_leaks:
+        story.append(Paragraph("Credential Leak Detector", heading))
+        cred_rows: list[list[Paragraph]] = [[
+            _cell("Channel", head_style),
+            _cell("Leak Type", head_style),
+            _cell("Severity", head_style),
+            _cell("Confidence", head_style),
+            _cell("Location", head_style),
+            _cell("Evidence", head_style),
+            _cell("Fix", head_style),
+        ]]
+        for item in result.credential_leaks[:60]:
+            cred_rows.append([
+                _cell(item.channel, cell_style),
+                _cell(item.leak_type, cell_style),
+                _cell(item.severity, cell_style),
+                _cell(item.confidence, cell_style),
+                _cell(_truncate(item.location, 110), cell_style),
+                _cell(_truncate(item.evidence, 170), cell_style),
+                _cell(_truncate(item.recommendation, 170), cell_style),
+            ])
+        story.append(_table(cred_rows, [24 * mm, 32 * mm, 14 * mm, 16 * mm, 55 * mm, 62 * mm, 62 * mm]))
+        story.append(Spacer(1, 10))
+
     if result.exposed_endpoints:
         story.append(Paragraph("Sensitive File / Endpoint Discovery", heading))
         ex_rows: list[list[Paragraph]] = [[

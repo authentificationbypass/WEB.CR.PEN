@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Subdomain Report &ndash; {{ result.target_domain }}</title>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
     <main class="report-shell">
@@ -14,58 +14,45 @@
         </nav>
 
         <!-- Hero -->
-        <header class="report-hero enum-hero">
-            <div>
-                <p class="eyebrow">Subdomain Enumeration &middot; Completed</p>
+        <header class="report-summary panel panel-flat">
+            <div class="summary-main">
+                <p class="eyebrow">Subdomain-Scan abgeschlossen</p>
                 <h1>{{ result.target_domain }}</h1>
-                <p class="muted-text">{{ result.started_at[:19].replace("T"," ") }} UTC</p>
+                <p class="summary-period">{{ result.started_at[:19].replace("T"," ") }} UTC</p>
             </div>
-            <div class="enum-badge-row">
-                {% if result.high_risk_count > 0 %}
-                <div class="risk-badge risk-high">
-                    <span>High Risk</span>
-                    <strong>{{ result.high_risk_count }}</strong>
-                </div>
-                {% endif %}
-                {% if result.medium_risk_count > 0 %}
-                <div class="risk-badge risk-medium">
-                    <span>Medium Risk</span>
-                    <strong>{{ result.medium_risk_count }}</strong>
-                </div>
-                {% endif %}
+            <div class="summary-kpis">
+                <span><strong>Getestet:</strong> {{ result.total_tested }}</span>
+                <span><strong>Resolved:</strong> {{ result.total_resolved }}</span>
+                <span><strong>Live:</strong> {{ result.live_count }}</span>
+                <span><strong>High Risk:</strong> {{ result.high_risk_count }}</span>
+                <span><strong>Medium Risk:</strong> {{ result.medium_risk_count }}</span>
             </div>
         </header>
 
-        <!-- Stats -->
-        <section class="metric-grid">
-            <article class="metric-card">
-                <span>Tested</span>
-                <strong>{{ result.total_tested }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Resolved (DNS)</span>
-                <strong>{{ result.total_resolved }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Live (HTTP/S)</span>
-                <strong>{{ result.live_count }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>From Certificates</span>
-                <strong>{{ result.cert_count }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>From Brute-Force</span>
-                <strong>{{ result.brute_count }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>With Risk Flags</span>
-                <strong>{{ result.high_risk_count + result.medium_risk_count }}</strong>
-            </article>
+        <section class="panel panel-flat summary-table-panel">
+            <h2>Uebersicht</h2>
+            <div class="table-shell">
+                <table class="summary-metrics-table">
+                    <tbody>
+                        <tr>
+                            <th>Tested</th><td>{{ result.total_tested }}</td>
+                            <th>Resolved (DNS)</th><td>{{ result.total_resolved }}</td>
+                            <th>Live (HTTP/S)</th><td>{{ result.live_count }}</td>
+                            <th>Cert Source</th><td>{{ result.cert_count }}</td>
+                        </tr>
+                        <tr>
+                            <th>Bruteforce Source</th><td>{{ result.brute_count }}</td>
+                            <th>Risk Flags</th><td>{{ result.high_risk_count + result.medium_risk_count }}</td>
+                            <th>High Risk</th><td>{{ result.high_risk_count }}</td>
+                            <th>Medium Risk</th><td>{{ result.medium_risk_count }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <!-- Apex DNS -->
-        <section class="panel two-column">
+        <section class="panel panel-flat two-column">
             <article>
                 <h2>Apex DNS &mdash; {{ result.target_domain }}</h2>
                 <dl class="definition-grid dns-grid">
@@ -123,30 +110,32 @@
         <!-- Risk Findings -->
         {% set risky = result.subdomains | selectattr("risk_flags") | list %}
         {% if risky %}
-        <section class="panel">
+        <section class="panel panel-flat">
             <h2>Risk Findings ({{ risky | length }})</h2>
-            <div class="finding-list">
-                {% for sub in risky | sort(attribute="risk_severity", reverse=true) %}
-                <div class="finding-card severity-{{ sub.risk_severity }}">
-                    <div class="finding-topline">
-                        <strong>{{ sub.subdomain }}</strong>
-                        <span class="severity-badge severity-{{ sub.risk_severity }}">{{ sub.risk_severity }}</span>
-                    </div>
-                    <p>{{ sub.risk_flags | join(" &middot; ") }}</p>
-                    {% if sub.ip_addresses %}
-                    <p class="finding-meta">IPs: {{ sub.ip_addresses | join(", ") }}
-                        {% if sub.country %} &middot; {{ sub.country }}{% endif %}
-                        {% if sub.http_title %} &middot; "{{ sub.http_title }}"{% endif %}
-                    </p>
-                    {% endif %}
-                </div>
-                {% endfor %}
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Subdomain</th><th>Severity</th><th>Flags</th><th>IPs</th><th>Country</th><th>Title</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in risky | sort(attribute="risk_severity", reverse=true) %}
+                        <tr>
+                            <td>{{ sub.subdomain }}</td>
+                            <td><span class="severity-badge severity-{{ sub.risk_severity }}">{{ sub.risk_severity }}</span></td>
+                            <td class="muted-text">{{ sub.risk_flags | join(", ") }}</td>
+                            <td class="ip-cell">{{ sub.ip_addresses | join(", ") if sub.ip_addresses else '&mdash;' }}</td>
+                            <td>{{ sub.country or '&mdash;' }}</td>
+                            <td class="muted-text">{{ sub.http_title or '&mdash;' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
         {% endif %}
 
         <!-- Subdomain Table -->
-        <section class="panel">
+        <section class="panel panel-flat">
             <div class="table-header-row">
                 <h2>All Resolved Subdomains ({{ result.total_resolved }})</h2>
                 <div class="table-controls">

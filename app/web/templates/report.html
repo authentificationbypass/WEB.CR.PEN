@@ -10,9 +10,9 @@
     <main class="report-shell">
         <header class="report-summary panel panel-flat">
             <div class="summary-main">
-                <p class="eyebrow">Scan abgeschlossen</p>
+                <p class="eyebrow">Scan completed</p>
                 <h1>{{ result.target_url }}</h1>
-                <p class="summary-period">Zeitraum: {{ result.started_at }} bis {{ result.finished_at }}</p>
+                <p class="summary-period">Period: {{ result.started_at }} to {{ result.finished_at }}</p>
             </div>
             <div class="summary-kpis">
                 <span><strong>Risk Score:</strong> {{ result.risk_score }} ({{ result.risk_level }})</span>
@@ -23,7 +23,7 @@
         </header>
 
         <section class="panel panel-flat summary-table-panel">
-            <h2>Uebersicht</h2>
+            <h2>Overview</h2>
             <div class="table-shell">
                 <table class="summary-metrics-table">
                     <tbody>
@@ -58,9 +58,10 @@
                             <th>Client Leaks</th><td>{{ result.summary.get('client_leaks_detected', 0) }}</td>
                         </tr>
                         <tr>
+                            <th>Credential Leaks</th><td>{{ result.summary.get('credential_leaks_detected', 0) }}</td>
                             <th>P1 Findings</th><td>{{ result.summary.get('priority_p1_detected', 0) }}</td>
                             <th>P2 Findings</th><td>{{ result.summary.get('priority_p2_detected', 0) }}</td>
-                            <th>Risk Score</th><td>{{ result.risk_score }}</td>
+                            <th>OWASP Top5</th><td>{{ result.summary.get('owasp_top5_detected', 0) }}/5</td>
                             <th>Security Grade</th><td>{{ result.security_grade }}</td>
                         </tr>
                     </tbody>
@@ -68,19 +69,200 @@
             </div>
         </section>
 
-        {% set plugin_components = result.cms_components | selectattr('component_type', 'equalto', 'plugin') | selectattr('version') | list %}
-        {% if plugin_components %}
-        <section class="panel">
-            <h2>Plugin Version Overview</h2>
-            <div class="chip-row">
-                {% for plugin in plugin_components[:20] %}
-                <span class="tracker-badge tracker-analytics">{{ plugin.component_name }} {{ plugin.version }}</span>
-                {% endfor %}
+        {% if result.owasp_top5 %}
+        <section class="panel panel-flat">
+            <h2>OWASP Top 5 Check</h2>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>Category</th><th>Status</th><th>Count</th><th>Severity</th><th>Evidence</th><th>Recommendation</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in result.owasp_top5 %}
+                        <tr>
+                            <td class="ip-cell">{{ item.code }}</td>
+                            <td><strong>{{ item.name }}</strong></td>
+                            <td>{% if item.detected %}<span class="vuln-sev sev-high">detected{% else %}<span class="vuln-sev sev-low">clear{% endif %}</span></td>
+                            <td>{{ item.count }}</td>
+                            <td><span class="vuln-sev sev-{{ item.severity if item.severity != 'info' else 'low' }}">{{ item.severity }}</span></td>
+                            <td class="muted-text vuln-desc">{{ item.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ item.recommendation }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
         {% endif %}
 
-        <section class="panel two-column">
+        {% set owasp_sql = namespace(item=None) %}
+        {% for item in result.owasp_top5 %}
+            {% if item.code == 'A03' %}
+                {% set owasp_sql.item = item %}
+            {% endif %}
+        {% endfor %}
+        {% set llm_ns = namespace(total=0) %}
+        {% for f in result.security_findings %}
+            {% if f.area == 'llm' %}
+                {% set llm_ns.total = llm_ns.total + 1 %}
+            {% endif %}
+        {% endfor %}
+
+        {% if owasp_sql.item or llm_ns.total > 0 %}
+        <section class="panel panel-flat">
+            <h2>Focused Checks: SQL Injection & LLM Security</h2>
+            {% if owasp_sql.item %}
+            <div class="table-shell" style="margin-bottom:1rem;">
+                <table>
+                    <thead>
+                        <tr><th>Check</th><th>Status</th><th>Count</th><th>Severity</th><th>Evidence</th><th>Recommendation</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>{{ owasp_sql.item.code }} {{ owasp_sql.item.name }}</strong></td>
+                            <td>{% if owasp_sql.item.detected %}<span class="vuln-sev sev-high">detected{% else %}<span class="vuln-sev sev-low">clear{% endif %}</span></td>
+                            <td>{{ owasp_sql.item.count }}</td>
+                            <td><span class="vuln-sev sev-{{ owasp_sql.item.severity if owasp_sql.item.severity != 'info' else 'low' }}">{{ owasp_sql.item.severity }}</span></td>
+                            <td class="muted-text vuln-desc">{{ owasp_sql.item.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ owasp_sql.item.recommendation }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if llm_ns.total > 0 %}
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Area</th><th>Category</th><th>Finding</th><th>Endpoint</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in result.security_findings %}
+                            {% if f.area == 'llm' %}
+                            <tr>
+                                <td class="nowrap-cell">{{ f.area | replace('-', ' ') }}</td>
+                                <td class="nowrap-cell">{{ f.category | replace('-', ' ') }}</td>
+                                <td><strong>{{ f.title }}</strong></td>
+                                <td class="endpoint-cell">
+                                    {% if f.endpoint %}
+                                    <div class="endpoint-wrap">
+                                        <div class="endpoint-actions">
+                                            <button type="button" class="inline-action endpoint-toggle" hidden>Show more</button>
+                                            <button type="button" class="inline-action endpoint-copy" data-copy="{{ f.endpoint | e }}">Copy</button>
+                                        </div>
+                                        <span class="endpoint-text">{{ f.endpoint }}</span>
+                                    </div>
+                                    {% else %}n/a{% endif %}
+                                </td>
+                                <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                                <td>{% if f.status_code is not none %}{{ f.status_code }}{% else %}n/a{% endif %}</td>
+                                <td>{{ f.confidence }}</td>
+                                <td class="muted-text vuln-desc">{{ f.compliance | join(', ') if f.compliance else 'n/a' }}</td>
+                                <td class="muted-text vuln-desc">{{ f.evidence }}</td>
+                                <td class="muted-text vuln-desc">{{ f.remediation }}</td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted-text">No dedicated LLM security findings were detected in this run.</p>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% set credential_leaks = result.credential_leaks if result.credential_leaks is defined else [] %}
+        {% if not credential_leaks and result.security_findings is defined %}
+            {% set fallback_leaks = result.security_findings | selectattr('area', 'equalto', 'client-leak') | list %}
+        {% else %}
+            {% set fallback_leaks = [] %}
+        {% endif %}
+        <section class="panel panel-flat" id="credential-leak-detector">
+            <h2>Credential Leak Detector</h2>
+            <p class="lede" style="margin-bottom:1.25rem;">Detected potential username/password/token leaks in observed request URLs. This table is dedicated to credential exposure so operators can remediate quickly.</p>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Channel</th><th>Leak Type</th><th>Severity</th><th>Confidence</th><th>Location</th><th>Evidence</th><th>Recommended Fix</th></tr>
+                    </thead>
+                    <tbody>
+                        {% if credential_leaks %}
+                        {% for item in credential_leaks %}
+                        <tr>
+                            <td class="nowrap-cell">{{ item.channel }}</td>
+                            <td class="nowrap-cell">{{ item.leak_type }}</td>
+                            <td><span class="vuln-sev sev-{{ item.severity if item.severity != 'critical' else 'critical' }}">{{ item.severity }}</span></td>
+                            <td>{{ item.confidence }}</td>
+                            <td class="endpoint-cell">
+                                <div class="endpoint-wrap">
+                                    <div class="endpoint-actions">
+                                        <button type="button" class="inline-action endpoint-toggle" hidden>Show more</button>
+                                        <button type="button" class="inline-action endpoint-copy" data-copy="{{ item.location | e }}">Copy</button>
+                                    </div>
+                                    <span class="endpoint-text">{{ item.location }}</span>
+                                </div>
+                            </td>
+                            <td class="muted-text vuln-desc">{{ item.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ item.recommendation }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% elif fallback_leaks %}
+                        {% for f in fallback_leaks %}
+                        <tr>
+                            <td class="nowrap-cell">legacy-audit</td>
+                            <td class="nowrap-cell">{{ f.category }}</td>
+                            <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                            <td>{{ f.confidence }}</td>
+                            <td class="endpoint-cell">
+                                {% if f.endpoint %}
+                                <div class="endpoint-wrap">
+                                    <div class="endpoint-actions">
+                                        <button type="button" class="inline-action endpoint-toggle" hidden>Show more</button>
+                                        <button type="button" class="inline-action endpoint-copy" data-copy="{{ f.endpoint | e }}">Copy</button>
+                                    </div>
+                                    <span class="endpoint-text">{{ f.endpoint }}</span>
+                                </div>
+                                {% else %}n/a{% endif %}
+                            </td>
+                            <td class="muted-text vuln-desc">{{ f.evidence }}</td>
+                            <td class="muted-text vuln-desc">{{ f.remediation }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="muted-text">No credential leaks detected in this scan.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        {% set plugin_components = result.cms_components | selectattr('component_type', 'equalto', 'plugin') | selectattr('version') | list %}
+        {% if plugin_components %}
+        <section class="panel panel-flat">
+            <h2>Plugin Version Overview</h2>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Plugin</th><th>Version</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for plugin in plugin_components[:20] %}
+                        <tr>
+                            <td>{{ plugin.component_name }}</td>
+                            <td class="ip-cell">{{ plugin.version }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="panel panel-flat two-column">
             <article>
                 <h2>Domain Traffic</h2>
                 {{ bar_chart | safe }}
@@ -91,19 +273,26 @@
             </article>
         </section>
 
-        <section class="panel two-column">
+        <section class="panel panel-flat two-column">
             <article>
                 <h2>Risk Findings</h2>
-                <div class="finding-list">
-                    {% for finding in result.risk_findings %}
-                    <div class="finding-card severity-{{ finding.severity }}">
-                        <div class="finding-topline">
-                            <strong>{{ finding.name }}</strong>
-                            <span>+{{ finding.score }}</span>
-                        </div>
-                        <p>{{ finding.rationale }}</p>
-                    </div>
-                    {% endfor %}
+                <div class="table-shell">
+                    <table>
+                        <thead>
+                            <tr><th>Category</th><th>Finding</th><th>Severity</th><th>Score</th><th>Rationale</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for finding in result.risk_findings %}
+                            <tr>
+                                <td>{{ finding.category }}</td>
+                                <td><strong>{{ finding.name }}</strong></td>
+                                <td><span class="vuln-sev sev-{{ finding.severity if finding.severity != 'critical' else 'critical' }}">{{ finding.severity }}</span></td>
+                                <td>{{ finding.score }}</td>
+                                <td class="muted-text vuln-desc">{{ finding.rationale }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </article>
             <article>
@@ -117,7 +306,7 @@
             </article>
         </section>
 
-        <section class="panel three-column">
+        <section class="panel panel-flat three-column">
             <article>
                 <h2>Cookies</h2>
                 <div class="table-shell">
@@ -140,15 +329,23 @@
             </article>
             <article>
                 <h2>Fingerprinting</h2>
-                <div class="finding-list compact">
-                    {% for finding in result.fingerprint_findings %}
-                    <div class="finding-card severity-{{ finding.severity }}">
-                        <strong>{{ finding.technique }}</strong>
-                        <p title="{{ finding.evidence }}">{{ finding.evidence[:120] }}{% if finding.evidence|length > 120 %}&hellip;{% endif %}</p>
-                    </div>
-                    {% else %}
-                    <p class="empty-state">No fingerprinting indicators detected.</p>
-                    {% endfor %}
+                <div class="table-shell">
+                    <table>
+                        <thead>
+                            <tr><th>Technique</th><th>Severity</th><th>Evidence</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for finding in result.fingerprint_findings %}
+                            <tr>
+                                <td>{{ finding.technique }}</td>
+                                <td><span class="vuln-sev sev-{{ finding.severity }}">{{ finding.severity }}</span></td>
+                                <td class="muted-text vuln-desc" title="{{ finding.evidence }}">{{ finding.evidence[:160] }}{% if finding.evidence|length > 160 %}&hellip;{% endif %}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="muted-text">No fingerprinting indicators detected.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </article>
             <article>
@@ -179,7 +376,7 @@
         </section>
 
         {% if result.tls_record %}
-        <section class="panel tls-section">
+        <section class="panel panel-flat tls-section">
             <div class="tls-header">
                 <div>
                     <h2>TLS / Certificate Analysis</h2>
@@ -232,14 +429,14 @@
         {% endif %}
 
         {% if result.js_vulns %}
-        <section class="panel jsvuln-section">
+        <section class="panel panel-flat jsvuln-section">
             <h2>JavaScript Library Vulnerabilities</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.js_vulns | length }} CVE(s) detected across {{ result.js_vulns | map(attribute='library') | unique | list | length }} librar(y/ies). Update the affected packages to the indicated fix version.</p>
             {% set js_ns = namespace(secondary=0) %}
             {% for v in result.js_vulns %}{% if v.severity in ['medium', 'low', 'info'] %}{% set js_ns.secondary = js_ns.secondary + 1 %}{% endif %}{% endfor %}
             {% if js_ns.secondary > 0 %}
             <div class="collapse-controls">
-                <button type="button" class="collapse-toggle" data-target="js-vuln-table" aria-expanded="false">Medium/Low anzeigen ({{ js_ns.secondary }})</button>
+                <button type="button" class="collapse-toggle" data-target="js-vuln-table" aria-expanded="false">Show medium/low ({{ js_ns.secondary }})</button>
             </div>
             {% endif %}
             <div class="table-shell">
@@ -267,7 +464,7 @@
         {% endif %}
 
         {% if result.cms_components %}
-        <section class="panel">
+        <section class="panel panel-flat">
             <h2>Detected CMS Components</h2>
             <div class="table-shell">
                 <table>
@@ -291,14 +488,14 @@
         {% endif %}
 
         {% if result.cms_vulns %}
-        <section class="panel">
+        <section class="panel panel-flat">
             <h2>CMS / Plugin Vulnerabilities</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.cms_vulns | length }} CVE(s) mapped against detected CMS versions and plugin versions.</p>
             {% set cms_ns = namespace(secondary=0) %}
             {% for v in result.cms_vulns %}{% if v.severity in ['medium', 'low', 'info'] %}{% set cms_ns.secondary = cms_ns.secondary + 1 %}{% endif %}{% endfor %}
             {% if cms_ns.secondary > 0 %}
             <div class="collapse-controls">
-                <button type="button" class="collapse-toggle" data-target="cms-vuln-table" aria-expanded="false">Medium/Low anzeigen ({{ cms_ns.secondary }})</button>
+                <button type="button" class="collapse-toggle" data-target="cms-vuln-table" aria-expanded="false">Show medium/low ({{ cms_ns.secondary }})</button>
             </div>
             {% endif %}
             <div class="table-shell">
@@ -327,14 +524,14 @@
         {% endif %}
 
         {% if result.exposed_endpoints %}
-        <section class="panel">
+        <section class="panel panel-flat">
             <h2>Sensitive File / Endpoint Discovery</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.exposed_endpoints | length }} potentially sensitive path(s) were identified. {{ result.summary.get('verified_exposed_endpoints', 0) }} finding(s) were actively verified by direct HTTP probing.</p>
             {% set ex_ns = namespace(secondary=0) %}
             {% for f in result.exposed_endpoints %}{% if f.severity in ['medium', 'low', 'info'] %}{% set ex_ns.secondary = ex_ns.secondary + 1 %}{% endif %}{% endfor %}
             {% if ex_ns.secondary > 0 %}
             <div class="collapse-controls">
-                <button type="button" class="collapse-toggle" data-target="exposed-table" aria-expanded="false">Medium/Low anzeigen ({{ ex_ns.secondary }})</button>
+                <button type="button" class="collapse-toggle" data-target="exposed-table" aria-expanded="false">Show medium/low ({{ ex_ns.secondary }})</button>
             </div>
             {% endif %}
             <div class="table-shell">
@@ -364,15 +561,26 @@
         </section>
         {% endif %}
 
-        {% if result.security_findings %}
-        <section class="panel">
+        {% set sec_ns = namespace(secondary=0, visible=0) %}
+        {% for f in result.security_findings %}
+            {% set title_l = (f.title or '') | lower %}
+            {% set category_l = (f.category or '') | lower %}
+            {% set is_special_focus = (f.area == 'llm') or ('sql' in title_l) or ('sql' in category_l) or ('injection' in title_l) or ('injection' in category_l) %}
+            {% if not is_special_focus %}
+                {% set sec_ns.visible = sec_ns.visible + 1 %}
+                {% if f.severity in ['medium', 'low', 'info'] %}
+                    {% set sec_ns.secondary = sec_ns.secondary + 1 %}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+
+        {% if sec_ns.visible > 0 %}
+        <section class="panel panel-flat">
             <h2>Active Security Hardening Audit</h2>
-            <p class="lede" style="margin-bottom:1.25rem;">Aktive Befunde aus Header/TLS-, Auth/Session-, API- und Client-Leak-Pruefungen. Die Spalte Priority hilft bei der Reihenfolge der Behebung.</p>
-            {% set sec_ns = namespace(secondary=0) %}
-            {% for f in result.security_findings %}{% if f.severity in ['medium', 'low', 'info'] %}{% set sec_ns.secondary = sec_ns.secondary + 1 %}{% endif %}{% endfor %}
+            <p class="lede" style="margin-bottom:1.25rem;">Active findings from header/TLS, auth/session, API, and client leak checks. The Priority column helps sequence remediation.</p>
             {% if sec_ns.secondary > 0 %}
             <div class="collapse-controls">
-                <button type="button" class="collapse-toggle" data-target="security-audit-table" aria-expanded="false">Medium/Low anzeigen ({{ sec_ns.secondary }})</button>
+                <button type="button" class="collapse-toggle" data-target="security-audit-table" aria-expanded="false">Show medium/low ({{ sec_ns.secondary }})</button>
             </div>
             {% endif %}
             <div class="table-shell">
@@ -382,6 +590,10 @@
                     </thead>
                     <tbody>
                         {% for f in result.security_findings %}
+                        {% set title_l = (f.title or '') | lower %}
+                        {% set category_l = (f.category or '') | lower %}
+                        {% set is_special_focus = (f.area == 'llm') or ('sql' in title_l) or ('sql' in category_l) or ('injection' in title_l) or ('injection' in category_l) %}
+                        {% if not is_special_focus %}
                         <tr{% if f.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
                             <td class="col-priority">{% if f.priority_tier %}<span class="vuln-sev sev-{% if f.priority_tier == 'P1' %}critical{% elif f.priority_tier == 'P2' %}high{% else %}medium{% endif %}">{{ f.priority_tier }}{% if f.priority_score is not none %} ({{ f.priority_score }}){% endif %}</span>{% else %}n/a{% endif %}</td>
                             <td class="nowrap-cell">{{ f.area | replace('-', ' ') }}</td>
@@ -389,7 +601,17 @@
                             <td>
                                 <strong>{{ f.title }}</strong>
                             </td>
-                            <td class="endpoint-cell">{{ f.endpoint or 'n/a' }}</td>
+                            <td class="endpoint-cell">
+                                {% if f.endpoint %}
+                                <div class="endpoint-wrap">
+                                    <div class="endpoint-actions">
+                                        <button type="button" class="inline-action endpoint-toggle" hidden>Show more</button>
+                                        <button type="button" class="inline-action endpoint-copy" data-copy="{{ f.endpoint | e }}">Copy</button>
+                                    </div>
+                                    <span class="endpoint-text">{{ f.endpoint }}</span>
+                                </div>
+                                {% else %}n/a{% endif %}
+                            </td>
                             <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
                             <td>{% if f.cvss_base is not none %}{{ '%.1f'|format(f.cvss_base) }}{% else %}n/a{% endif %}</td>
                             <td>{% if f.epss_probability is not none %}{{ '%.1f'|format(f.epss_probability * 100) }}%{% else %}n/a{% endif %}</td>
@@ -400,6 +622,7 @@
                             <td class="muted-text vuln-desc">{{ f.evidence }}</td>
                             <td class="muted-text vuln-desc">{{ f.remediation }}</td>
                         </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
@@ -431,14 +654,14 @@
 
         {% set auth_findings = result.security_findings | selectattr('area', 'equalto', 'auth-session') | list %}
         {% if auth_findings %}
-        <section class="panel" id="auth-session-details">
+        <section class="panel panel-flat" id="auth-session-details">
             <h2>Auth / Session Details</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ auth_findings | length }} finding(s) explain why the Auth/Session counter is elevated.</p>
             {% set auth_ns = namespace(secondary=0) %}
             {% for f in auth_findings %}{% if f.severity in ['medium', 'low', 'info'] %}{% set auth_ns.secondary = auth_ns.secondary + 1 %}{% endif %}{% endfor %}
             {% if auth_ns.secondary > 0 %}
             <div class="collapse-controls">
-                <button type="button" class="collapse-toggle" data-target="auth-table" aria-expanded="false">Medium/Low anzeigen ({{ auth_ns.secondary }})</button>
+                <button type="button" class="collapse-toggle" data-target="auth-table" aria-expanded="false">Show medium/low ({{ auth_ns.secondary }})</button>
             </div>
             {% endif %}
             <div class="table-shell">
@@ -469,91 +692,89 @@
 
         {% set gov_flows = result.domain_flows | selectattr('gov_label') | list %}
         {% if gov_flows %}
-        <section class="panel gov-section">
+        <section class="panel panel-flat gov-section">
             <h2>Government / State Infrastructure Connections</h2>
             <p class="lede" style="margin-bottom:1.25rem;">The following domains resolved to government or state-affiliated infrastructure. Any connection to these domains by the scanned website is flagged as high risk.</p>
-            <div class="finding-list">
-                {% for flow in gov_flows %}
-                <div class="gov-connection-card">
-                    <div>
-                        <div class="gov-domain">{{ flow.domain }}</div>
-                        <div class="gov-reason">{{ flow.gov_label }}</div>
-                        {% if flow.orgs %}
-                        <div class="gov-reason" style="margin-top:0.2rem;">{{ flow.orgs | join(', ') }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="gov-meta">
-                        <div>{{ flow.request_count }} requests</div>
-                        {% for ip in flow.ip_addresses %}
-                        <div class="gov-ip">{{ ip }}</div>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Domain</th><th>Reason</th><th>Requests</th><th>IPs</th><th>Countries</th><th>Org</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for flow in gov_flows %}
+                        <tr>
+                            <td>{{ flow.domain }}</td>
+                            <td>{{ flow.gov_label }}</td>
+                            <td>{{ flow.request_count }}</td>
+                            <td class="ip-cell">{{ flow.ip_addresses | join(', ') }}</td>
+                            <td>{{ flow.countries | join(', ') if flow.countries else 'n/a' }}</td>
+                            <td class="muted-text">{{ flow.orgs | join(', ') if flow.orgs else 'n/a' }}</td>
+                        </tr>
                         {% endfor %}
-                        {% if flow.countries %}
-                        <div style="margin-top:0.3rem;">{{ ', '.join(flow.countries) }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
         {% endif %}
 
         {% if result.header_findings %}
-        <section class="panel header-section">
+        <section class="panel panel-flat header-section">
             <div class="header-section-title">
                 <h2>Security Headers</h2>
                 <span class="sec-grade grade-{{ result.security_grade | lower | replace('+', '-plus') }} sec-grade-lg">{{ result.security_grade }}</span>
             </div>
-            <div class="finding-list">
-                {% for hf in result.header_findings %}
-                <div class="finding-card severity-{{ hf.severity }}">
-                    <div class="finding-topline">
-                        <strong>{{ hf.header }}</strong>
-                        <span class="header-status status-{{ hf.status }}">{{ hf.status | upper }}</span>
-                    </div>
-                    <p>{{ hf.detail }}</p>
-                    {% if hf.value %}
-                    <code class="header-value">{{ hf.value }}</code>
-                    {% endif %}
-                </div>
-                {% endfor %}
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>Header</th><th>Status</th><th>Severity</th><th>Detail</th><th>Value</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for hf in result.header_findings %}
+                        <tr>
+                            <td>{{ hf.header }}</td>
+                            <td><span class="header-status status-{{ hf.status }}">{{ hf.status }}</span></td>
+                            <td><span class="vuln-sev sev-{{ hf.severity if hf.severity != 'info' else 'low' }}">{{ hf.severity }}</span></td>
+                            <td class="muted-text vuln-desc">{{ hf.detail }}</td>
+                            <td class="ip-cell">{{ hf.value or 'n/a' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
         {% endif %}
 
         {% set gov_ip_records = result.ip_intel | selectattr('gov_confidence', 'in', ['confirmed', 'probable', 'possible']) | list %}
         {% if gov_ip_records %}
-        <section class="panel gov-obs-section">
+        <section class="panel panel-flat gov-obs-section">
             <h2>Government Infrastructure Observer</h2>
             <p class="lede" style="margin-bottom:1.25rem;">These IPs were matched against government or military infrastructure. Since this is a passive client-side scan, these are servers the website actively communicates with &mdash; not incoming visitors. Server-side visitor logs are not accessible from an external scan.</p>
-            <div class="gov-obs-grid">
-                {% for rec in gov_ip_records %}
-                <div class="gov-obs-card conf-{{ rec.gov_confidence }}">
-                    <div class="gov-obs-header">
-                        <span class="gov-obs-ip">{{ rec.ip }}</span>
-                        <span class="gov-obs-conf conf-pill-{{ rec.gov_confidence }}">{{ rec.gov_confidence | upper }}</span>
-                    </div>
-                    <div class="gov-obs-label">{{ rec.gov_label }}</div>
-                    {% if rec.rdns %}
-                    <div class="gov-obs-detail"><span class="detail-key">rDNS</span> <span class="detail-val">{{ rec.rdns }}</span></div>
-                    {% endif %}
-                    {% if rec.asn %}
-                    <div class="gov-obs-detail"><span class="detail-key">ASN</span> <span class="detail-val">{{ rec.asn }}{% if rec.asname %} &mdash; {{ rec.asname }}{% endif %}</span></div>
-                    {% endif %}
-                    {% if rec.org %}
-                    <div class="gov-obs-detail"><span class="detail-key">Org</span> <span class="detail-val">{{ rec.org }}</span></div>
-                    {% endif %}
-                    <div class="gov-obs-footer">
-                        {% if rec.country %}<span class="detail-tag">{{ rec.country }}</span>{% endif %}
-                        {% for tag in rec.tags %}<span class="detail-tag tag-{{ tag }}">{{ tag }}</span>{% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr><th>IP</th><th>Confidence</th><th>Classification</th><th>rDNS</th><th>ASN</th><th>Org</th><th>Country</th><th>Tags</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in gov_ip_records %}
+                        <tr>
+                            <td class="ip-cell">{{ rec.ip }}</td>
+                            <td><span class="conf-pill-{{ rec.gov_confidence }}">{{ rec.gov_confidence }}</span></td>
+                            <td>{{ rec.gov_label }}</td>
+                            <td class="ip-cell">{{ rec.rdns or 'n/a' }}</td>
+                            <td class="ip-cell">{{ rec.asn or 'n/a' }}{% if rec.asname %} / {{ rec.asname }}{% endif %}</td>
+                            <td>{{ rec.org or 'n/a' }}</td>
+                            <td>{{ rec.country or 'n/a' }}</td>
+                            <td class="muted-text">{{ rec.tags | join(', ') if rec.tags else 'n/a' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
         {% endif %}
 
         {% if result.ip_intel %}
-        <section class="panel ip-intel-section">
+        <section class="panel panel-flat ip-intel-section">
             <h2>IP Intelligence &mdash; all connected IPs</h2>
             <div class="table-shell">
                 <table>
@@ -585,7 +806,7 @@
         </section>
         {% endif %}
 
-        <section class="panel">
+        <section class="panel panel-flat">
             <div class="table-shell">
                 <table>
                     <thead>
@@ -605,10 +826,10 @@
             </div>
         </section>
 
-        <section class="panel report-export-panel">
-            <h2>Bericht exportieren</h2>
-            <p class="lede" style="margin-bottom:1rem;">PDF-Export mit Befunden, Prioritaeten, Evidenz und empfohlenen Massnahmen.</p>
-            <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">PDF herunterladen</a>
+        <section class="panel panel-flat report-export-panel">
+            <h2>Export report</h2>
+            <p class="lede" style="margin-bottom:1rem;">PDF export with findings, priorities, evidence, and recommended actions.</p>
+            <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">Download PDF</a>
         </section>
     </main>
     <script>
@@ -629,14 +850,68 @@
                     });
                     btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
                     btn.textContent = collapsed
-                        ? `Medium/Low anzeigen (${rows.length})`
-                        : `Medium/Low ausblenden (${rows.length})`;
+                        ? `Show medium/low (${rows.length})`
+                        : `Hide medium/low (${rows.length})`;
                 };
 
                 setCollapsed(true);
                 btn.addEventListener('click', () => {
                     const collapsed = btn.getAttribute('aria-expanded') !== 'true';
                     setCollapsed(!collapsed);
+                });
+            });
+
+            const MAX_ENDPOINT_LENGTH = 110;
+            const endpointNodes = document.querySelectorAll('.endpoint-text');
+            endpointNodes.forEach((node) => {
+                const full = (node.textContent || '').trim();
+                if (!full || full.length <= MAX_ENDPOINT_LENGTH) {
+                    return;
+                }
+                const wrap = node.closest('.endpoint-wrap');
+                const toggle = wrap ? wrap.querySelector('.endpoint-toggle') : null;
+                const shortValue = `${full.slice(0, MAX_ENDPOINT_LENGTH)}...`;
+                node.dataset.full = full;
+                node.dataset.short = shortValue;
+                node.dataset.expanded = 'false';
+                node.textContent = shortValue;
+                if (toggle) {
+                    toggle.hidden = false;
+                    toggle.textContent = 'Show more';
+                    toggle.addEventListener('click', () => {
+                        const expanded = node.dataset.expanded === 'true';
+                        node.dataset.expanded = expanded ? 'false' : 'true';
+                        node.textContent = expanded ? (node.dataset.short || full) : full;
+                        toggle.textContent = expanded ? 'Show more' : 'Show less';
+                    });
+                }
+            });
+
+            const copyButtons = document.querySelectorAll('.endpoint-copy');
+            copyButtons.forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const value = btn.getAttribute('data-copy') || '';
+                    if (!value) {
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(value);
+                        const original = btn.textContent;
+                        btn.textContent = 'Copied';
+                        setTimeout(() => {
+                            btn.textContent = original || 'Copy';
+                        }, 1200);
+                    } catch (_) {
+                        const input = document.createElement('textarea');
+                        input.value = value;
+                        input.setAttribute('readonly', 'readonly');
+                        input.style.position = 'absolute';
+                        input.style.left = '-9999px';
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                    }
                 });
             });
         })();

@@ -19,6 +19,16 @@ _SECRET_VALUE_RE = re.compile(
     r"(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,255}|xox[baprs]-[A-Za-z0-9-]{20,}|-----BEGIN (?:RSA|EC|OPENSSH|PGP) PRIVATE KEY-----|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})",
     re.I,
 )
+_LLM_PATH_RE = re.compile(r"/(?:api/)?(?:v\d+/)?(?:chat|completions?|assistant|agents?|llm|ai)(?:/|$)", re.I)
+_PROMPT_PARAM_RE = re.compile(r"(?:prompt|instruction|message|query|input)", re.I)
+_PROMPT_INJECTION_RE = re.compile(
+    r"(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|developer\s+message|jailbreak|do\s+anything\s+now|\bdan\b)",
+    re.I,
+)
+_LLM_SYSTEM_LEAK_RE = re.compile(
+    r"(?:system\s+prompt|developer\s+message|you\s+are\s+chatgpt|internal\s+instructions)",
+    re.I,
+)
 
 
 def _compliance_for(area: str, category: str, title: str) -> list[str]:
@@ -42,6 +52,9 @@ def _compliance_for(area: str, category: str, title: str) -> list[str]:
 
     if "client-leak" in key or "secret" in key:
         tags.extend(["OWASP A02 Cryptographic Failures", "OWASP A05 Security Misconfiguration", "ASVS 8.3"])
+
+    if "llm" in key:
+        tags.extend(["OWASP LLM01 Prompt Injection", "OWASP LLM06 Sensitive Information Disclosure"])
 
     # Keep stable ordering while deduplicating
     return list(dict.fromkeys(tags))
@@ -97,6 +110,17 @@ def _detect_secrets_in_url(url: str) -> list[str]:
             hits.append(f"query parameter '{key}'")
         if value and (_SECRET_VALUE_RE.search(value) or len(value) >= 28 and re.search(r"[A-Za-z]", value) and re.search(r"\d", value)):
             hits.append(f"suspicious token-like value in '{key or 'query'}'")
+    return list(dict.fromkeys(hits))
+
+
+def _detect_prompt_injection_in_url(url: str) -> list[str]:
+    parsed = urlparse(url)
+    hits: list[str] = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if not _PROMPT_PARAM_RE.search(key or ""):
+            continue
+        if value and _PROMPT_INJECTION_RE.search(value):
+            hits.append(f"prompt-injection phrase in '{key}'")
     return list(dict.fromkeys(hits))
 
 
@@ -326,6 +350,19 @@ async def run_security_audit(
                 endpoint=req.url,
                 evidence="Client requested a JavaScript source map file (*.map).",
                 remediation="Remove production source maps or gate them behind authentication.",
+                confidence="medium",
+            ))
+
+        prompt_hits = _detect_prompt_injection_in_url(req.url)
+        if prompt_hits:
+            findings.append(_build(
+                area="llm",
+                category="prompt-injection",
+                title="Prompt injection marker in LLM request URL",
+                severity="high",
+                endpoint=req.url,
+                evidence=f"Detected {', '.join(prompt_hits)} in observed request URL.",
+                remediation="Treat user prompts as untrusted input, apply prompt isolation, and enforce output/allowlist guards.",
                 confidence="medium",
             ))
 
@@ -584,6 +621,21 @@ async def run_security_audit(
                 remediation="Remove secret material from responses, rotate exposed keys, and add leak prevention checks.",
                 confidence="medium",
             ))
+
+        if _LLM_PATH_RE.search(path):
+            leak_match = _LLM_SYSTEM_LEAK_RE.search(response.text or "")
+            if leak_match:
+                findings.append(_build(
+                    area="llm",
+                    category="system-prompt-leak",
+                    title="Potential LLM system prompt or internal instruction leak",
+                    severity="high",
+                    endpoint=url,
+                    status_code=response.status_code,
+                    evidence=f"LLM/API response includes sensitive instruction marker: '{leak_match.group(0)}'.",
+                    remediation="Do not return hidden prompts/instructions to clients; separate system prompts and apply response filtering.",
+                    confidence="medium",
+                ))
 
     for url, resp in zip(graphql_urls, graphql_introspection_responses):
         if isinstance(resp, Exception) or resp is None:

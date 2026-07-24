@@ -195,6 +195,28 @@ class SecurityAuditFinding:
 
 
 @dataclass(slots=True)
+class OwaspTop5Record:
+    code: str
+    name: str
+    detected: bool
+    count: int
+    severity: str
+    evidence: str
+    recommendation: str
+
+
+@dataclass(slots=True)
+class CredentialLeakFinding:
+    channel: str
+    leak_type: str
+    severity: str
+    location: str
+    evidence: str
+    recommendation: str
+    confidence: str = "medium"
+
+
+@dataclass(slots=True)
 class DomainFlow:
     domain: str
     request_count: int
@@ -261,6 +283,8 @@ class ScanResult:
     cms_vulns: list[CmsVulnFinding] = field(default_factory=list)
     exposed_endpoints: list[ExposedEndpointFinding] = field(default_factory=list)
     security_findings: list[SecurityAuditFinding] = field(default_factory=list)
+    owasp_top5: list[OwaspTop5Record] = field(default_factory=list)
+    credential_leaks: list[CredentialLeakFinding] = field(default_factory=list)
 
 
 @dataclass(slots=True)
