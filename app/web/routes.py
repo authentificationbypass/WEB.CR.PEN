@@ -23,6 +23,28 @@ def _build_compliance_summary(result: ScanResult) -> list[tuple[str, int]]:
 
 
 def _build_bar_chart(domain_flows) -> str:
+    if not domain_flows:
+        figure = go.Figure()
+        figure.add_annotation(
+            text="No domain traffic captured",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font={"color": "#f2f2f2", "size": 14},
+        )
+        figure.update_xaxes(visible=False)
+        figure.update_yaxes(visible=False)
+        figure.update_layout(
+            title="Top contacted domains",
+            paper_bgcolor="#111111",
+            plot_bgcolor="#111111",
+            font={"color": "#f2f2f2"},
+            margin={"l": 30, "r": 20, "t": 50, "b": 60},
+        )
+        return figure.to_html(include_plotlyjs=True, full_html=False)
+
     figure = go.Figure(
         data=[
             go.Bar(
@@ -39,7 +61,7 @@ def _build_bar_chart(domain_flows) -> str:
         font={"color": "#f2f2f2"},
         margin={"l": 30, "r": 20, "t": 50, "b": 60},
     )
-    return figure.to_html(include_plotlyjs="cdn", full_html=False)
+    return figure.to_html(include_plotlyjs=True, full_html=False)
 
 
 def _build_country_chart(result: ScanResult) -> str:
@@ -48,6 +70,29 @@ def _build_country_chart(result: ScanResult) -> str:
         if not request.country:
             continue
         country_counts[request.country] = country_counts.get(request.country, 0) + 1
+
+    if not country_counts:
+        figure = go.Figure()
+        figure.add_annotation(
+            text="No geo data available (all lookups unresolved)",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font={"color": "#f2f2f2", "size": 14},
+        )
+        figure.update_xaxes(visible=False)
+        figure.update_yaxes(visible=False)
+        figure.update_layout(
+            title="Data destinations by country",
+            paper_bgcolor="#111111",
+            plot_bgcolor="#111111",
+            font={"color": "#f2f2f2"},
+            margin={"l": 10, "r": 10, "t": 50, "b": 10},
+        )
+        return figure.to_html(include_plotlyjs=False, full_html=False)
+
     figure = go.Figure(
         data=[
             go.Choropleth(

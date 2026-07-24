@@ -46,23 +46,46 @@ class GeoResolver:
         is_hosting = False
         is_proxy = False
         try:
-            async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
+            async with httpx.AsyncClient(
+                timeout=settings.request_timeout_seconds,
+                headers={"User-Agent": settings.user_agent},
+            ) as client:
                 response = await client.get(
                     f"{settings.geolocation_api_base}/{ip_address}",
                     params={"fields": "country,city,org,as,asname,reverse,hosting,proxy"},
                 )
                 response.raise_for_status()
                 payload = response.json()
-                country = payload.get("country")
-                city = payload.get("city")
-                org = payload.get("org")
-                asn = payload.get("as")        # "AS15169 Google LLC"
-                asname = payload.get("asname")  # "GOOGLE"
-                rdns = payload.get("reverse") or None
-                is_hosting = bool(payload.get("hosting", False))
-                is_proxy = bool(payload.get("proxy", False))
+                if payload.get("status") != "fail":
+                    country = payload.get("country")
+                    city = payload.get("city")
+                    org = payload.get("org")
+                    asn = payload.get("as")        # "AS15169 Google LLC"
+                    asname = payload.get("asname")  # "GOOGLE"
+                    rdns = payload.get("reverse") or None
+                    is_hosting = bool(payload.get("hosting", False))
+                    is_proxy = bool(payload.get("proxy", False))
         except Exception:
             pass
+
+        # Fallback provider without API token if primary provider was unavailable.
+        if not country:
+            try:
+                async with httpx.AsyncClient(
+                    timeout=settings.request_timeout_seconds,
+                    headers={"User-Agent": settings.user_agent},
+                ) as client:
+                    response = await client.get(f"https://ipwho.is/{ip_address}")
+                    response.raise_for_status()
+                    payload = response.json()
+                    if payload.get("success") is True:
+                        country = country or payload.get("country")
+                        city = city or payload.get("city")
+                        org = org or payload.get("connection", {}).get("org")
+                        asn = asn or payload.get("connection", {}).get("asn")
+                        rdns = rdns or payload.get("connection", {}).get("domain")
+            except Exception:
+                pass
 
         record = GeoRecord(
             ip_address=ip_address,
