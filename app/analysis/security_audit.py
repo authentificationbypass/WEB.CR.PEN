@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from http.cookies import SimpleCookie
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 import httpx
 
@@ -12,6 +12,13 @@ from app.models import CookieRecord, PageRecord, RequestRecord, SecurityAuditFin
 
 
 _SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+_CONF_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+_SECRET_PARAM_RE = re.compile(r"(?:api[_-]?key|token|secret|password|passwd|auth|jwt|access[_-]?token|client[_-]?secret)", re.I)
+_SECRET_VALUE_RE = re.compile(
+    r"(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,255}|xox[baprs]-[A-Za-z0-9-]{20,}|-----BEGIN (?:RSA|EC|OPENSSH|PGP) PRIVATE KEY-----|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})",
+    re.I,
+)
 
 
 def _compliance_for(area: str, category: str, title: str) -> list[str]:
@@ -33,6 +40,9 @@ def _compliance_for(area: str, category: str, title: str) -> list[str]:
         if "data-exposure" in key:
             tags.append("OWASP A01 Broken Access Control")
 
+    if "client-leak" in key or "secret" in key:
+        tags.extend(["OWASP A02 Cryptographic Failures", "OWASP A05 Security Misconfiguration", "ASVS 8.3"])
+
     # Keep stable ordering while deduplicating
     return list(dict.fromkeys(tags))
 
@@ -53,6 +63,11 @@ def _build(
     status_code: int | None = None,
     confidence: str = "medium",
     compliance: list[str] | None = None,
+    cvss_base: float | None = None,
+    epss_probability: float | None = None,
+    exploit_maturity: str | None = None,
+    priority_score: int | None = None,
+    priority_tier: str | None = None,
 ) -> SecurityAuditFinding:
     tags = compliance or _compliance_for(area, category, title)
     return SecurityAuditFinding(
@@ -66,7 +81,82 @@ def _build(
         status_code=status_code,
         confidence=confidence,
         compliance=tags,
+        cvss_base=cvss_base,
+        epss_probability=epss_probability,
+        exploit_maturity=exploit_maturity,
+        priority_score=priority_score,
+        priority_tier=priority_tier,
     )
+
+
+def _detect_secrets_in_url(url: str) -> list[str]:
+    parsed = urlparse(url)
+    hits: list[str] = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if _SECRET_PARAM_RE.search(key or ""):
+            hits.append(f"query parameter '{key}'")
+        if value and (_SECRET_VALUE_RE.search(value) or len(value) >= 28 and re.search(r"[A-Za-z]", value) and re.search(r"\d", value)):
+            hits.append(f"suspicious token-like value in '{key or 'query'}'")
+    return list(dict.fromkeys(hits))
+
+
+def _prioritize_metrics_for_finding(finding: SecurityAuditFinding) -> tuple[float, float, str, int, str]:
+    # Coarse baseline mapped from severity, then adjusted per category.
+    base_by_sev = {
+        "critical": 9.3,
+        "high": 8.2,
+        "medium": 6.2,
+        "low": 3.8,
+        "info": 1.5,
+    }
+    cvss = base_by_sev.get(finding.severity, 5.0)
+    epss = 0.10 if finding.severity == "medium" else 0.22 if finding.severity == "high" else 0.35 if finding.severity == "critical" else 0.03
+    maturity = "poc"
+
+    key = f"{finding.area}:{finding.category}:{finding.title}".lower()
+    if "sensitive" in key or "unauthenticated" in key or "private key" in key:
+        cvss = max(cvss, 9.1)
+        epss = max(epss, 0.45)
+        maturity = "active"
+    elif "graphql introspection" in key or "openapi" in key or "swagger" in key:
+        cvss = max(cvss, 5.9)
+        epss = max(epss, 0.08)
+        maturity = "poc"
+    elif "set-cookie" in key or "session cookie" in key:
+        cvss = max(cvss, 7.4)
+        epss = max(epss, 0.20)
+        maturity = "poc"
+    elif "cors" in key and "credentials" in key:
+        cvss = max(cvss, 8.0)
+        epss = max(epss, 0.30)
+        maturity = "active"
+
+    conf_bonus = {"high": 10, "medium": 5, "low": 0}.get(finding.confidence, 0)
+    maturity_bonus = {"active": 20, "poc": 12, "unproven": 4}.get(maturity, 8)
+    priority_score = min(100, int(round(cvss * 7 + epss * 100 * 0.25 + conf_bonus + maturity_bonus)))
+    if priority_score >= 85:
+        tier = "P1"
+    elif priority_score >= 70:
+        tier = "P2"
+    elif priority_score >= 50:
+        tier = "P3"
+    else:
+        tier = "P4"
+
+    return round(cvss, 1), round(epss, 3), maturity, priority_score, tier
+
+
+def _apply_prioritization(findings: list[SecurityAuditFinding]) -> list[SecurityAuditFinding]:
+    out: list[SecurityAuditFinding] = []
+    for finding in findings:
+        cvss, epss, maturity, score, tier = _prioritize_metrics_for_finding(finding)
+        finding.cvss_base = cvss
+        finding.epss_probability = epss
+        finding.exploit_maturity = maturity
+        finding.priority_score = score
+        finding.priority_tier = tier
+        out.append(finding)
+    return out
 
 
 def _unique_same_origin_urls(target_url: str, pages: list[PageRecord], requests: list[RequestRecord], limit: int) -> list[str]:
@@ -179,6 +269,18 @@ def _audit_cookie_flags(cookies: list[CookieRecord]) -> list[SecurityAuditFindin
                 confidence="medium",
             ))
 
+        if same_site == "none" and not cookie.secure:
+            findings.append(_build(
+                area="auth-session",
+                category="cookie",
+                title="Session cookie uses SameSite=None without Secure",
+                severity="high",
+                endpoint=cookie.domain,
+                evidence=f"Cookie '{cookie.name}' uses SameSite=None and is not Secure.",
+                remediation="Set Secure when SameSite=None is required, otherwise use SameSite=Lax/Strict.",
+                confidence="high",
+            ))
+
     return findings
 
 
@@ -197,6 +299,35 @@ async def run_security_audit(
 ) -> list[SecurityAuditFinding]:
     findings: list[SecurityAuditFinding] = []
     findings.extend(_audit_cookie_flags(cookies))
+
+    # Passive leakage checks from captured client-side traffic URLs.
+    for req in requests:
+        if not req.url:
+            continue
+        leak_hits = _detect_secrets_in_url(req.url)
+        if leak_hits:
+            findings.append(_build(
+                area="client-leak",
+                category="url-secret",
+                title="Potential secret/token leaked via URL",
+                severity="high",
+                endpoint=req.url,
+                evidence=f"Detected {', '.join(leak_hits[:2])} in observed request URL.",
+                remediation="Do not send secrets in URLs; move tokens to secure headers/body and rotate leaked keys.",
+                confidence="high",
+            ))
+
+        if req.url.lower().endswith(".map"):
+            findings.append(_build(
+                area="client-leak",
+                category="source-map",
+                title="Source map exposed to unauthenticated clients",
+                severity="medium",
+                endpoint=req.url,
+                evidence="Client requested a JavaScript source map file (*.map).",
+                remediation="Remove production source maps or gate them behind authentication.",
+                confidence="medium",
+            ))
 
     if tls_record is not None and tls_record.grade in ("F", "D", "C"):
         findings.append(_build(
@@ -226,6 +357,18 @@ async def run_security_audit(
     async with httpx.AsyncClient(timeout=timeout_seconds, headers={"User-Agent": user_agent}, follow_redirects=True) as client:
         endpoint_responses = await asyncio.gather(*[_get(url, client) for url in endpoint_urls], return_exceptions=False)
         api_responses = await asyncio.gather(*[_get(url, client) for url in api_urls], return_exceptions=False)
+
+        graphql_urls = [url for url in api_urls if "/graphql" in (urlparse(url).path or "").lower()]
+        graphql_introspection_responses = await asyncio.gather(
+            *[
+                client.post(
+                    url,
+                    json={"query": "query IntrospectionQuery { __schema { queryType { name } } }"},
+                )
+                for url in graphql_urls
+            ],
+            return_exceptions=True,
+        )
 
     # 1) Active header hardening checks per endpoint
     for url, response in zip(endpoint_urls, endpoint_responses):
@@ -283,6 +426,20 @@ async def run_security_audit(
                     status_code=response.status_code,
                     evidence="Administrative-looking path responded 200 without obvious auth redirect.",
                     remediation="Enforce authentication and MFA on admin paths; return 401/403 for unauthenticated access.",
+                    confidence="medium",
+                ))
+
+            cache_control = response.headers.get("cache-control", "").lower()
+            if not any(token in cache_control for token in ("no-store", "private", "no-cache")):
+                findings.append(_build(
+                    area="auth-session",
+                    category="cache-control",
+                    title="Auth endpoint cache policy is weak",
+                    severity="medium",
+                    endpoint=url,
+                    status_code=response.status_code,
+                    evidence="Login/admin endpoint response lacks strict cache-control directives.",
+                    remediation="Set Cache-Control: no-store, private on auth/session-sensitive responses.",
                     confidence="medium",
                 ))
 
@@ -370,6 +527,81 @@ async def run_security_audit(
                     confidence="medium",
                 ))
 
+        # API profiling: CORS, method exposure, and weak object-level auth heuristic.
+        allow_origin = response.headers.get("access-control-allow-origin", "")
+        allow_creds = response.headers.get("access-control-allow-credentials", "").lower()
+        if allow_origin.strip() == "*" and allow_creds == "true":
+            findings.append(_build(
+                area="api",
+                category="cors",
+                title="CORS wildcard with credentials enabled",
+                severity="high",
+                endpoint=url,
+                status_code=response.status_code,
+                evidence="Response sets Access-Control-Allow-Origin=* with Access-Control-Allow-Credentials=true.",
+                remediation="Disallow wildcard origins when credentials are enabled; use strict allowlists.",
+                confidence="high",
+            ))
+
+        allow_methods = response.headers.get("allow", "").upper()
+        if any(method in allow_methods for method in ("PUT", "PATCH", "DELETE")):
+            findings.append(_build(
+                area="api",
+                category="method-exposure",
+                title="Potentially dangerous API methods advertised",
+                severity="medium",
+                endpoint=url,
+                status_code=response.status_code,
+                evidence=f"Allow header advertises: {allow_methods}",
+                remediation="Restrict unauthenticated exposure of mutating verbs and enforce method-level authorization.",
+                confidence="medium",
+            ))
+
+        if re.search(r"/\d{1,12}(?:$|[/?#])", path) and response.status_code == 200 and "application/json" in content_type:
+            findings.append(_build(
+                area="api",
+                category="bola-candidate",
+                title="Potential BOLA candidate endpoint",
+                severity="medium",
+                endpoint=url,
+                status_code=response.status_code,
+                evidence="Object-ID style API path returned 200 in unauthenticated baseline probe.",
+                remediation="Verify object-level authorization checks (owner/tenant checks) for ID-based API routes.",
+                confidence="low",
+            ))
+
+        # Secret leak scan in API responses.
+        match = _SECRET_VALUE_RE.search(response.text or "")
+        if match:
+            findings.append(_build(
+                area="client-leak",
+                category="response-secret",
+                title="Potential credential material in HTTP response",
+                severity="high",
+                endpoint=url,
+                status_code=response.status_code,
+                evidence=f"Response contains token/key-like pattern: {match.group(0)[:24]}...",
+                remediation="Remove secret material from responses, rotate exposed keys, and add leak prevention checks.",
+                confidence="medium",
+            ))
+
+    for url, resp in zip(graphql_urls, graphql_introspection_responses):
+        if isinstance(resp, Exception) or resp is None:
+            continue
+        text = resp.text or ""
+        if resp.status_code == 200 and "__schema" in text:
+            findings.append(_build(
+                area="api",
+                category="graphql-introspection",
+                title="GraphQL introspection enabled",
+                severity="medium",
+                endpoint=url,
+                status_code=resp.status_code,
+                evidence="Introspection query returned schema metadata.",
+                remediation="Disable introspection in production or restrict it to authenticated admin roles.",
+                confidence="high",
+            ))
+
     # Deduplicate by coarse identity.
     deduped: dict[tuple[str, str, str | None], SecurityAuditFinding] = {}
     for finding in findings:
@@ -379,10 +611,9 @@ async def run_security_audit(
             deduped[key] = finding
             continue
         # Prefer higher confidence when duplicate exists.
-        order = {"high": 0, "medium": 1, "low": 2}
-        if order.get(finding.confidence, 9) < order.get(prev.confidence, 9):
+        if _CONF_ORDER.get(finding.confidence, 9) < _CONF_ORDER.get(prev.confidence, 9):
             deduped[key] = finding
 
-    out = list(deduped.values())
-    out.sort(key=lambda f: (_SEV_ORDER.get(f.severity, 9), f.area, f.title.lower()))
+    out = _apply_prioritization(list(deduped.values()))
+    out.sort(key=lambda f: ((f.priority_score or 0) * -1, _SEV_ORDER.get(f.severity, 9), f.area, f.title.lower()))
     return out

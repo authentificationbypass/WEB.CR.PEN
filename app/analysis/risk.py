@@ -266,6 +266,9 @@ def calculate_risk(
         high_critical = [f for f in security_findings if f.severity in ("high", "critical")]
         auth_issues = [f for f in security_findings if f.area == "auth-session" and f.severity in ("high", "critical")]
         api_issues = [f for f in security_findings if f.area == "api" and f.severity in ("high", "critical")]
+        client_leaks = [f for f in security_findings if f.area == "client-leak" and f.severity in ("high", "critical")]
+        p1_items = [f for f in security_findings if (f.priority_tier == "P1")]
+        p2_items = [f for f in security_findings if (f.priority_tier == "P2")]
 
         if high_critical:
             sec_score = min(30, len(high_critical) * 4)
@@ -298,6 +301,28 @@ def calculate_risk(
                 api_score,
                 "Public API metadata or sensitive API responses were detected.",
                 "medium",
+            ))
+
+        if client_leaks:
+            leak_score = min(22, len(client_leaks) * 7)
+            score += leak_score
+            findings.append(RiskFinding(
+                "exposure",
+                f"Client-side secret leakage indicators ({len(client_leaks)})",
+                leak_score,
+                "URLs or responses suggest token/key material may be exposed to clients.",
+                "high",
+            ))
+
+        if p1_items or p2_items:
+            prio_score = min(20, len(p1_items) * 8 + len(p2_items) * 4)
+            score += prio_score
+            findings.append(RiskFinding(
+                "prioritization",
+                f"High-priority findings present (P1={len(p1_items)}, P2={len(p2_items)})",
+                prio_score,
+                "CVSS/EPSS/exploit-maturity prioritization indicates urgent remediation items.",
+                "high" if p1_items else "medium",
             ))
 
     score = min(100, score)

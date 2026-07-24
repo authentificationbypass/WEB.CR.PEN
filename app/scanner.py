@@ -219,6 +219,15 @@ async def run_scan(job: ScanJob) -> None:
         hardening_issue_count = len([f for f in security_findings if f.severity in ("high", "critical")])
         auth_issue_count = len([f for f in security_findings if f.area == "auth-session"])
         api_issue_count = len([f for f in security_findings if f.area == "api"])
+        api_profile_count = len([
+            f for f in security_findings
+            if f.area == "api" and f.category in {
+                "discovery", "graphql", "graphql-introspection", "cors", "method-exposure", "bola-candidate"
+            }
+        ])
+        client_leak_count = len([f for f in security_findings if f.area == "client-leak"])
+        priority_p1_count = len([f for f in security_findings if f.priority_tier == "P1"])
+        priority_p2_count = len([f for f in security_findings if f.priority_tier == "P2"])
 
         summary = {
             "pages_scanned": len(pages),
@@ -239,6 +248,10 @@ async def run_scan(job: ScanJob) -> None:
             "hardening_issues_detected": hardening_issue_count,
             "auth_session_issues_detected": auth_issue_count,
             "api_issues_detected": api_issue_count,
+            "api_profile_findings_detected": api_profile_count,
+            "client_leaks_detected": client_leak_count,
+            "priority_p1_detected": priority_p1_count,
+            "priority_p2_detected": priority_p2_count,
         }
         header_findings, security_grade = analyze_security_headers(main_headers)
         risk_score, risk_level, risk_findings = calculate_risk(

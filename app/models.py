@@ -187,6 +187,11 @@ class SecurityAuditFinding:
     status_code: int | None = None
     confidence: str = "medium"
     compliance: list[str] = field(default_factory=list)
+    cvss_base: float | None = None
+    epss_probability: float | None = None
+    exploit_maturity: str | None = None
+    priority_score: int | None = None
+    priority_tier: str | None = None
 
 
 @dataclass(slots=True)

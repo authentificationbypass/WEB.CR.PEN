@@ -4,101 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scan Report</title>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
     <main class="report-shell">
-        <header class="report-hero">
-            <div style="min-width:0; flex:1;">
-                <p class="eyebrow">Completed Analysis</p>
+        <header class="report-summary panel panel-flat">
+            <div class="summary-main">
+                <p class="eyebrow">Scan abgeschlossen</p>
                 <h1>{{ result.target_url }}</h1>
-                <p>Scan period: {{ result.started_at }} to {{ result.finished_at }}</p>
+                <p class="summary-period">Zeitraum: {{ result.started_at }} bis {{ result.finished_at }}</p>
             </div>
-            <div class="risk-badge risk-{{ result.risk_level.lower() }}">
-                <span>Risk Score</span>
-                <strong>{{ result.risk_score }}</strong>
-                <small>{{ result.risk_level }}</small>
-            </div>
-            <div class="sec-grade grade-{{ result.security_grade | lower | replace('+', '-plus') }}">
-                <span>Security</span>
-                <strong>{{ result.security_grade }}</strong>
-                <small>Headers</small>
+            <div class="summary-kpis">
+                <span><strong>Risk Score:</strong> {{ result.risk_score }} ({{ result.risk_level }})</span>
+                <span><strong>Security Grade:</strong> {{ result.security_grade }}</span>
+                <span><strong>Domains:</strong> {{ result.summary.domains_contacted }}</span>
+                <span><strong>Requests:</strong> {{ result.summary.requests_observed }}</span>
             </div>
         </header>
 
-        <section class="metric-grid">
-            <article class="metric-card">
-                <span>Pages</span>
-                <strong>{{ result.summary.pages_scanned }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Requests</span>
-                <strong>{{ result.summary.requests_observed }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Domains</span>
-                <strong>{{ result.summary.domains_contacted }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Countries</span>
-                <strong>{{ result.summary.countries_contacted }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Cookies</span>
-                <strong>{{ result.summary.cookies_detected }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Fingerprinting</span>
-                <strong>{{ result.summary.fingerprint_techniques }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Trackers</span>
-                <strong>{{ result.summary.get('trackers_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('gov_ips_detected', 0) > 0 %} metric-alert{% endif %}">
-                <span>Gov IPs</span>
-                <strong>{{ result.summary.get('gov_ips_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('js_vulns_detected', 0) > 0 %} metric-warn{% endif %}">
-                <span>JS CVEs</span>
-                <strong>{{ result.summary.get('js_vulns_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>CMS Components</span>
-                <strong>{{ result.summary.get('cms_components_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('cms_vulns_detected', 0) > 0 %} metric-warn{% endif %}">
-                <span>CMS CVEs</span>
-                <strong>{{ result.summary.get('cms_vulns_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card">
-                <span>Plugin Versions</span>
-                <strong>{{ result.summary.get('plugin_versions_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('exposed_endpoints_detected', 0) > 0 %} metric-alert{% endif %}">
-                <span>Sensitive Endpoints</span>
-                <strong>{{ result.summary.get('exposed_endpoints_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('sensitive_files_detected', 0) > 0 %} metric-alert{% endif %}">
-                <span>Sensitive Files</span>
-                <strong>{{ result.summary.get('sensitive_files_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('verified_exposed_endpoints', 0) > 0 %} metric-alert{% endif %}">
-                <span>Verified Exposures</span>
-                <strong>{{ result.summary.get('verified_exposed_endpoints', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('hardening_issues_detected', 0) > 0 %} metric-warn{% endif %}">
-                <span>Hardening Issues</span>
-                <strong>{{ result.summary.get('hardening_issues_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('auth_session_issues_detected', 0) > 0 %} metric-alert{% endif %}">
-                <span>Auth/Session</span>
-                <strong>{{ result.summary.get('auth_session_issues_detected', 0) }}</strong>
-            </article>
-            <article class="metric-card{% if result.summary.get('api_issues_detected', 0) > 0 %} metric-warn{% endif %}">
-                <span>API Issues</span>
-                <strong>{{ result.summary.get('api_issues_detected', 0) }}</strong>
-            </article>
+        <section class="panel panel-flat summary-table-panel">
+            <h2>Uebersicht</h2>
+            <div class="table-shell">
+                <table class="summary-metrics-table">
+                    <tbody>
+                        <tr>
+                            <th>Pages</th><td>{{ result.summary.pages_scanned }}</td>
+                            <th>Requests</th><td>{{ result.summary.requests_observed }}</td>
+                            <th>Domains</th><td>{{ result.summary.domains_contacted }}</td>
+                            <th>Countries</th><td>{{ result.summary.countries_contacted }}</td>
+                        </tr>
+                        <tr>
+                            <th>Cookies</th><td>{{ result.summary.cookies_detected }}</td>
+                            <th>Fingerprinting</th><td>{{ result.summary.fingerprint_techniques }}</td>
+                            <th>Trackers</th><td>{{ result.summary.get('trackers_detected', 0) }}</td>
+                            <th>Gov IPs</th><td>{{ result.summary.get('gov_ips_detected', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <th>JS CVEs</th><td>{{ result.summary.get('js_vulns_detected', 0) }}</td>
+                            <th>CMS Components</th><td>{{ result.summary.get('cms_components_detected', 0) }}</td>
+                            <th>CMS CVEs</th><td>{{ result.summary.get('cms_vulns_detected', 0) }}</td>
+                            <th>Plugin Versions</th><td>{{ result.summary.get('plugin_versions_detected', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <th>Sensitive Endpoints</th><td>{{ result.summary.get('exposed_endpoints_detected', 0) }}</td>
+                            <th>Sensitive Files</th><td>{{ result.summary.get('sensitive_files_detected', 0) }}</td>
+                            <th>Verified Exposures</th><td>{{ result.summary.get('verified_exposed_endpoints', 0) }}</td>
+                            <th>Hardening Issues</th><td>{{ result.summary.get('hardening_issues_detected', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <th>Auth/Session</th><td>{{ result.summary.get('auth_session_issues_detected', 0) }}</td>
+                            <th>API Issues</th><td>{{ result.summary.get('api_issues_detected', 0) }}</td>
+                            <th>API Profile</th><td>{{ result.summary.get('api_profile_findings_detected', 0) }}</td>
+                            <th>Client Leaks</th><td>{{ result.summary.get('client_leaks_detected', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <th>P1 Findings</th><td>{{ result.summary.get('priority_p1_detected', 0) }}</td>
+                            <th>P2 Findings</th><td>{{ result.summary.get('priority_p2_detected', 0) }}</td>
+                            <th>Risk Score</th><td>{{ result.risk_score }}</td>
+                            <th>Security Grade</th><td>{{ result.security_grade }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         {% set plugin_components = result.cms_components | selectattr('component_type', 'equalto', 'plugin') | selectattr('version') | list %}
@@ -268,14 +235,21 @@
         <section class="panel jsvuln-section">
             <h2>JavaScript Library Vulnerabilities</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.js_vulns | length }} CVE(s) detected across {{ result.js_vulns | map(attribute='library') | unique | list | length }} librar(y/ies). Update the affected packages to the indicated fix version.</p>
+            {% set js_ns = namespace(secondary=0) %}
+            {% for v in result.js_vulns %}{% if v.severity in ['medium', 'low', 'info'] %}{% set js_ns.secondary = js_ns.secondary + 1 %}{% endif %}{% endfor %}
+            {% if js_ns.secondary > 0 %}
+            <div class="collapse-controls">
+                <button type="button" class="collapse-toggle" data-target="js-vuln-table" aria-expanded="false">Medium/Low anzeigen ({{ js_ns.secondary }})</button>
+            </div>
+            {% endif %}
             <div class="table-shell">
-                <table>
+                <table id="js-vuln-table">
                     <thead>
                         <tr><th>Library</th><th>Detected</th><th>Fix</th><th>Severity</th><th>CVE / Advisory</th><th>Description</th></tr>
                     </thead>
                     <tbody>
                         {% for v in result.js_vulns %}
-                        <tr>
+                        <tr{% if v.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
                             <td><strong>{{ v.library }}</strong></td>
                             <td class="ip-cell vuln-ver">{{ v.version }}</td>
                             <td class="ip-cell fix-ver">&ge;{{ v.fix_version }}</td>
@@ -320,14 +294,21 @@
         <section class="panel">
             <h2>CMS / Plugin Vulnerabilities</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.cms_vulns | length }} CVE(s) mapped against detected CMS versions and plugin versions.</p>
+            {% set cms_ns = namespace(secondary=0) %}
+            {% for v in result.cms_vulns %}{% if v.severity in ['medium', 'low', 'info'] %}{% set cms_ns.secondary = cms_ns.secondary + 1 %}{% endif %}{% endfor %}
+            {% if cms_ns.secondary > 0 %}
+            <div class="collapse-controls">
+                <button type="button" class="collapse-toggle" data-target="cms-vuln-table" aria-expanded="false">Medium/Low anzeigen ({{ cms_ns.secondary }})</button>
+            </div>
+            {% endif %}
             <div class="table-shell">
-                <table>
+                <table id="cms-vuln-table">
                     <thead>
                         <tr><th>Component</th><th>Type</th><th>Detected</th><th>Fixed in</th><th>Severity</th><th>CVE</th><th>Description</th></tr>
                     </thead>
                     <tbody>
                         {% for v in result.cms_vulns %}
-                        <tr>
+                        <tr{% if v.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
                             <td><strong>{{ v.component_name }}</strong></td>
                             <td>{{ v.component_type }}</td>
                             <td class="ip-cell vuln-ver">{{ v.version }}</td>
@@ -349,14 +330,21 @@
         <section class="panel">
             <h2>Sensitive File / Endpoint Discovery</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ result.exposed_endpoints | length }} potentially sensitive path(s) were identified. {{ result.summary.get('verified_exposed_endpoints', 0) }} finding(s) were actively verified by direct HTTP probing.</p>
+            {% set ex_ns = namespace(secondary=0) %}
+            {% for f in result.exposed_endpoints %}{% if f.severity in ['medium', 'low', 'info'] %}{% set ex_ns.secondary = ex_ns.secondary + 1 %}{% endif %}{% endfor %}
+            {% if ex_ns.secondary > 0 %}
+            <div class="collapse-controls">
+                <button type="button" class="collapse-toggle" data-target="exposed-table" aria-expanded="false">Medium/Low anzeigen ({{ ex_ns.secondary }})</button>
+            </div>
+            {% endif %}
             <div class="table-shell">
-                <table>
+                <table id="exposed-table">
                     <thead>
                         <tr><th>Category</th><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Evidence</th><th>Recommended Fix</th><th>URL</th></tr>
                     </thead>
                     <tbody>
                         {% for f in result.exposed_endpoints %}
-                        <tr>
+                        <tr{% if f.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
                             <td>{{ f.category }}</td>
                             <td>
                                 <strong>{{ f.name }}</strong><br>
@@ -379,22 +367,33 @@
         {% if result.security_findings %}
         <section class="panel">
             <h2>Active Security Hardening Audit</h2>
-            <p class="lede" style="margin-bottom:1.25rem;">This section combines active checks for endpoint headers/TLS hardening, auth/session controls, and API baseline exposures.</p>
+            <p class="lede" style="margin-bottom:1.25rem;">Aktive Befunde aus Header/TLS-, Auth/Session-, API- und Client-Leak-Pruefungen. Die Spalte Priority hilft bei der Reihenfolge der Behebung.</p>
+            {% set sec_ns = namespace(secondary=0) %}
+            {% for f in result.security_findings %}{% if f.severity in ['medium', 'low', 'info'] %}{% set sec_ns.secondary = sec_ns.secondary + 1 %}{% endif %}{% endfor %}
+            {% if sec_ns.secondary > 0 %}
+            <div class="collapse-controls">
+                <button type="button" class="collapse-toggle" data-target="security-audit-table" aria-expanded="false">Medium/Low anzeigen ({{ sec_ns.secondary }})</button>
+            </div>
+            {% endif %}
             <div class="table-shell">
-                <table>
+                <table class="audit-table" id="security-audit-table">
                     <thead>
-                        <tr><th>Area</th><th>Category</th><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
+                        <tr><th>Priority</th><th>Area</th><th>Category</th><th>Finding</th><th>Endpoint</th><th>Severity</th><th>CVSS</th><th>EPSS</th><th>Exploit</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
                     </thead>
                     <tbody>
                         {% for f in result.security_findings %}
-                        <tr>
-                            <td>{{ f.area }}</td>
-                            <td>{{ f.category }}</td>
+                        <tr{% if f.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
+                            <td class="col-priority">{% if f.priority_tier %}<span class="vuln-sev sev-{% if f.priority_tier == 'P1' %}critical{% elif f.priority_tier == 'P2' %}high{% else %}medium{% endif %}">{{ f.priority_tier }}{% if f.priority_score is not none %} ({{ f.priority_score }}){% endif %}</span>{% else %}n/a{% endif %}</td>
+                            <td class="nowrap-cell">{{ f.area | replace('-', ' ') }}</td>
+                            <td class="nowrap-cell">{{ f.category | replace('-', ' ') }}</td>
                             <td>
                                 <strong>{{ f.title }}</strong>
-                                {% if f.endpoint %}<br><span class="muted-text">{{ f.endpoint }}</span>{% endif %}
                             </td>
+                            <td class="endpoint-cell">{{ f.endpoint or 'n/a' }}</td>
                             <td><span class="vuln-sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+                            <td>{% if f.cvss_base is not none %}{{ '%.1f'|format(f.cvss_base) }}{% else %}n/a{% endif %}</td>
+                            <td>{% if f.epss_probability is not none %}{{ '%.1f'|format(f.epss_probability * 100) }}%{% else %}n/a{% endif %}</td>
+                            <td>{{ f.exploit_maturity or 'n/a' }}</td>
                             <td>{% if f.status_code is not none %}{{ f.status_code }}{% else %}n/a{% endif %}</td>
                             <td>{{ f.confidence }}</td>
                             <td class="muted-text vuln-desc">{{ f.compliance | join(', ') if f.compliance else 'n/a' }}</td>
@@ -435,14 +434,21 @@
         <section class="panel" id="auth-session-details">
             <h2>Auth / Session Details</h2>
             <p class="lede" style="margin-bottom:1.25rem;">{{ auth_findings | length }} finding(s) explain why the Auth/Session counter is elevated.</p>
+            {% set auth_ns = namespace(secondary=0) %}
+            {% for f in auth_findings %}{% if f.severity in ['medium', 'low', 'info'] %}{% set auth_ns.secondary = auth_ns.secondary + 1 %}{% endif %}{% endfor %}
+            {% if auth_ns.secondary > 0 %}
+            <div class="collapse-controls">
+                <button type="button" class="collapse-toggle" data-target="auth-table" aria-expanded="false">Medium/Low anzeigen ({{ auth_ns.secondary }})</button>
+            </div>
+            {% endif %}
             <div class="table-shell">
-                <table>
+                <table id="auth-table">
                     <thead>
                         <tr><th>Finding</th><th>Severity</th><th>Status</th><th>Confidence</th><th>Compliance</th><th>Evidence</th><th>Recommended Fix</th></tr>
                     </thead>
                     <tbody>
                         {% for f in auth_findings %}
-                        <tr>
+                        <tr{% if f.severity in ['medium', 'low', 'info'] %} class="collapse-row"{% endif %}>
                             <td>
                                 <strong>{{ f.title }}</strong>
                                 {% if f.endpoint %}<br><span class="muted-text">{{ f.endpoint }}</span>{% endif %}
@@ -600,10 +606,40 @@
         </section>
 
         <section class="panel report-export-panel">
-            <h2>Export Report</h2>
-            <p class="lede" style="margin-bottom:1rem;">Download a structured PDF with all findings, scores, evidence, and remediation notes for later reporting.</p>
-            <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">Download PDF Report</a>
+            <h2>Bericht exportieren</h2>
+            <p class="lede" style="margin-bottom:1rem;">PDF-Export mit Befunden, Prioritaeten, Evidenz und empfohlenen Massnahmen.</p>
+            <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">PDF herunterladen</a>
         </section>
     </main>
+    <script>
+        (function () {
+            const toggles = document.querySelectorAll('.collapse-toggle');
+            toggles.forEach((btn) => {
+                const table = document.getElementById(btn.dataset.target || '');
+                if (!table) return;
+                const rows = table.querySelectorAll('tbody tr.collapse-row');
+                if (!rows.length) {
+                    btn.style.display = 'none';
+                    return;
+                }
+
+                const setCollapsed = (collapsed) => {
+                    rows.forEach((row) => {
+                        row.style.display = collapsed ? 'none' : '';
+                    });
+                    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                    btn.textContent = collapsed
+                        ? `Medium/Low anzeigen (${rows.length})`
+                        : `Medium/Low ausblenden (${rows.length})`;
+                };
+
+                setCollapsed(true);
+                btn.addEventListener('click', () => {
+                    const collapsed = btn.getAttribute('aria-expanded') !== 'true';
+                    setCollapsed(!collapsed);
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

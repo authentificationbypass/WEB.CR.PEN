@@ -108,25 +108,34 @@ def build_scan_report_pdf(job: ScanJob, result: ScanResult) -> bytes:
     if result.security_findings:
         story.append(Paragraph("Active Security Hardening Audit", heading))
         sec_rows: list[list[Paragraph]] = [[
+            _cell("Priority", head_style),
             _cell("Area", head_style),
             _cell("Severity", head_style),
             _cell("Finding", head_style),
+            _cell("CVSS", head_style),
+            _cell("EPSS", head_style),
             _cell("Endpoint", head_style),
             _cell("Compliance", head_style),
             _cell("Evidence", head_style),
             _cell("Fix", head_style),
         ]]
         for item in result.security_findings[:50]:
+            prio = item.priority_tier or "n/a"
+            if item.priority_score is not None and item.priority_tier:
+                prio = f"{item.priority_tier} ({item.priority_score})"
             sec_rows.append([
+                _cell(prio, cell_style),
                 _cell(item.area, cell_style),
                 _cell(item.severity, cell_style),
                 _cell(item.title, cell_style),
+                _cell(f"{item.cvss_base:.1f}" if item.cvss_base is not None else "n/a", cell_style),
+                _cell(f"{item.epss_probability * 100:.1f}%" if item.epss_probability is not None else "n/a", cell_style),
                 _cell(_truncate(item.endpoint or "n/a", 80), cell_style),
                 _cell(", ".join(item.compliance) if item.compliance else "n/a", cell_style),
                 _cell(_truncate(item.evidence, 180), cell_style),
                 _cell(_truncate(item.remediation, 180), cell_style),
             ])
-        story.append(_table(sec_rows, [20 * mm, 16 * mm, 52 * mm, 40 * mm, 54 * mm, 52 * mm, 52 * mm]))
+        story.append(_table(sec_rows, [20 * mm, 16 * mm, 14 * mm, 40 * mm, 12 * mm, 12 * mm, 28 * mm, 38 * mm, 44 * mm, 44 * mm]))
         story.append(Spacer(1, 10))
 
         story.append(Paragraph("Compliance Mapping (OWASP / ASVS)", heading))

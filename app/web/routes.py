@@ -1,9 +1,8 @@
 ﻿from __future__ import annotations
 
 from dataclasses import asdict
-from urllib.parse import urlparse
+from html import escape
 
-import plotly.graph_objects as go
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -22,46 +21,29 @@ def _build_compliance_summary(result: ScanResult) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
 
 
-def _build_bar_chart(domain_flows) -> str:
-    if not domain_flows:
-        figure = go.Figure()
-        figure.add_annotation(
-            text="No domain traffic captured",
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-            font={"color": "#f2f2f2", "size": 14},
-        )
-        figure.update_xaxes(visible=False)
-        figure.update_yaxes(visible=False)
-        figure.update_layout(
-            title="Top contacted domains",
-            paper_bgcolor="#111111",
-            plot_bgcolor="#111111",
-            font={"color": "#f2f2f2"},
-            margin={"l": 30, "r": 20, "t": 50, "b": 60},
-        )
-        return figure.to_html(include_plotlyjs=True, full_html=False)
+def _build_svg_bar_chart(items: list[tuple[str, int]], empty_text: str) -> str:
+    if not items:
+        return f'<div class="chart-empty">{escape(empty_text)}</div>'
 
-    figure = go.Figure(
-        data=[
-            go.Bar(
-                x=[flow.domain for flow in domain_flows[:10]],
-                y=[flow.request_count for flow in domain_flows[:10]],
-                marker_color="#c3423f",
-            )
-        ]
-    )
-    figure.update_layout(
-        title="Top contacted domains",
-        paper_bgcolor="#111111",
-        plot_bgcolor="#111111",
-        font={"color": "#f2f2f2"},
-        margin={"l": 30, "r": 20, "t": 50, "b": 60},
-    )
-    return figure.to_html(include_plotlyjs=True, full_html=False)
+    top_items = items[:8]
+    max_value = max(value for _, value in top_items) or 1
+
+    rows: list[str] = []
+    for label, value in top_items:
+        width = int((value / max_value) * 100)
+        rows.append(
+            "<li class=\"mini-chart-row\">"
+            f"<span class=\"mini-chart-label\" title=\"{escape(label)}\">{escape(label)}</span>"
+            f"<div class=\"mini-chart-track\"><span class=\"mini-chart-fill\" style=\"width:{width}%\"></span></div>"
+            f"<span class=\"mini-chart-value\">{value}</span>"
+            "</li>"
+        )
+    return f'<ul class="mini-chart">{"".join(rows)}</ul>'
+
+
+def _build_bar_chart(domain_flows) -> str:
+    items = [(flow.domain, flow.request_count) for flow in domain_flows]
+    return _build_svg_bar_chart(items, "No domain traffic captured")
 
 
 def _build_country_chart(result: ScanResult) -> str:
@@ -71,48 +53,8 @@ def _build_country_chart(result: ScanResult) -> str:
             continue
         country_counts[request.country] = country_counts.get(request.country, 0) + 1
 
-    if not country_counts:
-        figure = go.Figure()
-        figure.add_annotation(
-            text="No geo data available (all lookups unresolved)",
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-            font={"color": "#f2f2f2", "size": 14},
-        )
-        figure.update_xaxes(visible=False)
-        figure.update_yaxes(visible=False)
-        figure.update_layout(
-            title="Data destinations by country",
-            paper_bgcolor="#111111",
-            plot_bgcolor="#111111",
-            font={"color": "#f2f2f2"},
-            margin={"l": 10, "r": 10, "t": 50, "b": 10},
-        )
-        return figure.to_html(include_plotlyjs=False, full_html=False)
-
-    figure = go.Figure(
-        data=[
-            go.Choropleth(
-                locations=list(country_counts.keys()),
-                locationmode="country names",
-                z=list(country_counts.values()),
-                colorscale="Reds",
-                marker_line_color="#222222",
-                colorbar_title="Requests",
-            )
-        ]
-    )
-    figure.update_layout(
-        title="Data destinations by country",
-        paper_bgcolor="#111111",
-        geo={"bgcolor": "#111111", "lakecolor": "#111111"},
-        font={"color": "#f2f2f2"},
-        margin={"l": 10, "r": 10, "t": 50, "b": 10},
-    )
-    return figure.to_html(include_plotlyjs=False, full_html=False)
+    items = sorted(country_counts.items(), key=lambda kv: kv[1], reverse=True)
+    return _build_svg_bar_chart(items, "No geo data available (all lookups unresolved)")
 
 
 def build_router(templates: Jinja2Templates, queue: JobQueue) -> APIRouter:

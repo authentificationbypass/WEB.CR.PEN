@@ -144,3 +144,43 @@ def test_risk_increases_for_active_security_audit_findings() -> None:
     assert score >= 8
     assert level in {"Low", "Medium", "High"}
     assert any("hardening checks" in finding.name.lower() for finding in risk_findings)
+
+
+def test_risk_includes_prioritization_and_client_leak_signals() -> None:
+    score, level, risk_findings = calculate_risk(
+        requests=[],
+        cookies=[],
+        scripts=[],
+        fingerprint_findings=[],
+        security_findings=[
+            SecurityAuditFinding(
+                area="client-leak",
+                category="url-secret",
+                title="Potential secret/token leaked via URL",
+                severity="high",
+                endpoint="https://target.example/api?token=abcd",
+                evidence="query parameter 'token'",
+                remediation="Move secret to secure headers.",
+                confidence="high",
+                priority_score=92,
+                priority_tier="P1",
+            ),
+            SecurityAuditFinding(
+                area="api",
+                category="discovery",
+                title="Public API documentation endpoint",
+                severity="medium",
+                endpoint="https://target.example/openapi.json",
+                evidence="OpenAPI doc reachable.",
+                remediation="Restrict docs.",
+                confidence="high",
+                priority_score=72,
+                priority_tier="P2",
+            ),
+        ],
+    )
+
+    assert score >= 10
+    assert level in {"Low", "Medium", "High"}
+    assert any("secret leakage" in finding.name.lower() for finding in risk_findings)
+    assert any("high-priority findings" in finding.name.lower() for finding in risk_findings)
