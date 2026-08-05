@@ -7,23 +7,42 @@
     <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
-    <main class="page-shell narrow">
-        <section class="panel scan-panel">
-            <p class="eyebrow">Scan in Progress</p>
-            <h1>{{ job.target_url }}</h1>
-            <div class="scan-progress">
-                <div class="pulse"></div>
-                <div>
-                    <p class="status-line">Status: <strong>{{ job.status.value }}</strong></p>
-                    <p>{{ job.progress_message }}</p>
-                    {% if job.error %}
-                    <p class="error-message">{{ job.error }}</p>
-                    {% endif %}
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">Burp-style Workspace</div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/">Dashboard</a>
+                <a class="nav-item" href="/enum/">Subdomain</a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="topbar">
+                <div class="topbar-title"><span class="status-dot"></span> Scan Runner</div>
+                <div class="topbar-actions">
+                    <a class="topbar-link" href="/">Back to overview</a>
                 </div>
-            </div>
-            <a href="/" class="text-link">Back to Overview</a>
-        </section>
-    </main>
+            </header>
+
+            <main class="content-grid">
+                <section class="panel scan-panel">
+                    <p class="eyebrow">Scan in Progress</p>
+                    <h1>{{ job.target_url }}</h1>
+                    <div class="scan-progress">
+                        <div class="pulse"></div>
+                        <div>
+                            <p class="status-line">Status: <strong>{{ job.status.value }}</strong></p>
+                            <p>{{ job.progress_message }}</p>
+                            {% if job.error %}
+                            <p class="error-message">{{ job.error }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <a href="/" class="text-link">Back to Overview</a>
+                </section>
+            </main>
+        </div>
+    </div>
     <script>
         setTimeout(() => {
             window.location.reload();

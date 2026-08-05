@@ -7,53 +7,73 @@
     <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
-    <main class="page-shell">
-        <nav class="top-nav">
-            <span class="nav-active">Web Crawler</span>
-            <a href="/enum/">Subdomain Enumerator &rarr;</a>
-        </nav>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">Burp-style Workspace</div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="/">Dashboard</a>
+                <a class="nav-item" href="/enum/">Subdomain</a>
+            </nav>
+            <div class="sidebar-card">
+                <p>Active workspace</p>
+                <strong>Web Crawler</strong>
+                <span>Requests, cookies &amp; risks</span>
+            </div>
+        </aside>
 
-        <section class="hero">
-            <p class="eyebrow">Website Analysis</p>
-            <h1>Lokale Analyse von Requests, Cookies und Sicherheitsrisiken.</h1>
-            <p class="lede">Gib eine Ziel-URL an. Der Crawler folgt internen Links, sammelt technische Signale und erstellt einen klaren Bericht mit Risiken und Priorisierung.</p>
-            <form action="/scan" method="post" class="scan-form">
-                <label for="target_url">URL</label>
-                <div class="input-row">
-                    <input id="target_url" name="target_url" type="text" placeholder="https://example.com" required>
-                    <button type="submit">Start Scan</button>
+        <div class="main-area">
+            <header class="topbar">
+                <div class="topbar-title"><span class="status-dot"></span> Penetration Testing Workspace</div>
+                <div class="topbar-actions">
+                    <span class="topbar-pill">Live scan view</span>
+                    <a class="topbar-link" href="/enum/">Subdomain Enumerator</a>
                 </div>
-            </form>
-        </section>
+            </header>
 
-        <section class="jobs-panel panel-flat">
-            <div class="panel-header">
-                <h2>Letzte Scans</h2>
-            </div>
-            {% if jobs %}
-            <div class="table-shell">
-                <table>
-                    <thead>
-                        <tr><th>Ziel</th><th>Status</th><th>Fortschritt</th><th>Risk</th><th>Security</th><th>Open</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for job in jobs %}
-                        <tr>
-                            <td>{{ job.target_url }}</td>
-                            <td><span class="status status-{{ job.status.value }}">{{ job.status.value }}</span></td>
-                            <td class="muted-text">{{ job.progress_message }}</td>
-                            <td>{% if job.result %}{{ job.result.risk_score }}{% else %}n/a{% endif %}</td>
-                            <td>{% if job.result %}{{ job.result.security_grade }}{% else %}n/a{% endif %}</td>
-                            <td><a class="text-link" href="/jobs/{{ job.id }}">Bericht</a></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <p class="empty-state">No scans started yet.</p>
-            {% endif %}
-        </section>
-    </main>
+            <main class="content-grid">
+                <section class="hero">
+                    <p class="eyebrow">Website Analysis</p>
+                    <h1>Lokale Analyse von Requests, Cookies und Sicherheitsrisiken.</h1>
+                    <p class="lede">Gib eine Ziel-URL an. Der Crawler folgt internen Links, sammelt technische Signale und erstellt einen klaren Bericht mit Risiken und Priorisierung.</p>
+                    <form action="/scan" method="post" class="scan-form">
+                        <label for="target_url">Target URL</label>
+                        <div class="input-row">
+                            <input id="target_url" name="target_url" type="text" placeholder="https://example.com" required>
+                            <button type="submit">Start Scan</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="jobs-panel panel-flat">
+                    <div class="panel-header">
+                        <h2>Letzte Scans</h2>
+                    </div>
+                    {% if jobs %}
+                    <div class="table-shell">
+                        <table>
+                            <thead>
+                                <tr><th>Ziel</th><th>Status</th><th>Fortschritt</th><th>Risk</th><th>Security</th><th>Open</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for job in jobs %}
+                                <tr>
+                                    <td>{{ job.target_url }}</td>
+                                    <td><span class="status status-{{ job.status.value }}">{{ job.status.value }}</span></td>
+                                    <td class="muted-text">{{ job.progress_message }}</td>
+                                    <td>{% if job.result %}{{ job.result.risk_score }}{% else %}n/a{% endif %}</td>
+                                    <td>{% if job.result %}{{ job.result.security_grade }}{% else %}n/a{% endif %}</td>
+                                    <td><a class="text-link" href="/jobs/{{ job.id }}">Bericht</a></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="empty-state">No scans started yet.</p>
+                    {% endif %}
+                </section>
+            </main>
+        </div>
+    </div>
 </body>
 </html>

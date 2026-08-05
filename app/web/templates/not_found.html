@@ -7,12 +7,28 @@
     <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
-    <main class="page-shell narrow">
-        <section class="panel scan-panel">
-            <p class="eyebrow">404</p>
-            <h1>Job Not Found</h1>
-            <a href="/" class="text-link">Back to Home</a>
-        </section>
-    </main>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">Burp-style Workspace</div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/">Dashboard</a>
+                <a class="nav-item" href="/enum/">Subdomain</a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="topbar">
+                <div class="topbar-title"><span class="status-dot"></span> Not Found</div>
+            </header>
+
+            <main class="content-grid">
+                <section class="panel scan-panel">
+                    <p class="eyebrow">404</p>
+                    <h1>Job Not Found</h1>
+                    <a href="/" class="text-link">Back to Home</a>
+                </section>
+            </main>
+        </div>
+    </div>
 </body>
 </html>

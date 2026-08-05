@@ -7,20 +7,42 @@
     <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
-    <main class="report-shell">
-        <header class="report-summary panel panel-flat">
-            <div class="summary-main">
-                <p class="eyebrow">Scan completed</p>
-                <h1>{{ result.target_url }}</h1>
-                <p class="summary-period">Period: {{ result.started_at }} to {{ result.finished_at }}</p>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">Burp-style Workspace</div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/">Dashboard</a>
+                <a class="nav-item" href="/enum/">Subdomain</a>
+            </nav>
+            <div class="sidebar-card">
+                <p>Report view</p>
+                <strong>Scan results</strong>
+                <span>Evidence-driven findings</span>
             </div>
-            <div class="summary-kpis">
-                <span><strong>Risk Score:</strong> {{ result.risk_score }} ({{ result.risk_level }})</span>
-                <span><strong>Security Grade:</strong> {{ result.security_grade }}</span>
-                <span><strong>Domains:</strong> {{ result.summary.domains_contacted }}</span>
-                <span><strong>Requests:</strong> {{ result.summary.requests_observed }}</span>
-            </div>
-        </header>
+        </aside>
+
+        <div class="main-area">
+            <header class="topbar">
+                <div class="topbar-title"><span class="status-dot"></span> Report Workspace</div>
+                <div class="topbar-actions">
+                    <a class="topbar-link" href="/">Back to dashboard</a>
+                </div>
+            </header>
+
+            <main class="report-shell">
+                <header class="report-summary panel panel-flat">
+                    <div class="summary-main">
+                        <p class="eyebrow">Scan completed</p>
+                        <h1>{{ result.target_url }}</h1>
+                        <p class="summary-period">Period: {{ result.started_at }} to {{ result.finished_at }}</p>
+                    </div>
+                    <div class="summary-kpis">
+                        <span><strong>Risk Score:</strong> {{ result.risk_score }} ({{ result.risk_level }})</span>
+                        <span><strong>Security Grade:</strong> {{ result.security_grade }}</span>
+                        <span><strong>Domains:</strong> {{ result.summary.domains_contacted }}</span>
+                        <span><strong>Requests:</strong> {{ result.summary.requests_observed }}</span>
+                    </div>
+                </header>
 
         <section class="panel panel-flat summary-table-panel">
             <h2>Overview</h2>
@@ -32,37 +54,35 @@
                             <th>Requests</th><td>{{ result.summary.requests_observed }}</td>
                             <th>Domains</th><td>{{ result.summary.domains_contacted }}</td>
                             <th>Countries</th><td>{{ result.summary.countries_contacted }}</td>
+                            <th>Security Grade</th><td>{{ result.security_grade }}</td>
                         </tr>
                         <tr>
                             <th>Cookies</th><td>{{ result.summary.cookies_detected }}</td>
-                            <th>Fingerprinting</th><td>{{ result.summary.fingerprint_techniques }}</td>
+                            <th>Fingerprint</th><td>{{ result.summary.fingerprint_techniques }}</td>
                             <th>Trackers</th><td>{{ result.summary.get('trackers_detected', 0) }}</td>
                             <th>Gov IPs</th><td>{{ result.summary.get('gov_ips_detected', 0) }}</td>
+                            <th>JS CVEs</th><td>{{ result.summary.get('js_vulns_detected', 0) }}</td>
                         </tr>
                         <tr>
-                            <th>JS CVEs</th><td>{{ result.summary.get('js_vulns_detected', 0) }}</td>
-                            <th>CMS Components</th><td>{{ result.summary.get('cms_components_detected', 0) }}</td>
+                            <th>CMS Comps</th><td>{{ result.summary.get('cms_components_detected', 0) }}</td>
                             <th>CMS CVEs</th><td>{{ result.summary.get('cms_vulns_detected', 0) }}</td>
                             <th>Plugin Versions</th><td>{{ result.summary.get('plugin_versions_detected', 0) }}</td>
-                        </tr>
-                        <tr>
-                            <th>Sensitive Endpoints</th><td>{{ result.summary.get('exposed_endpoints_detected', 0) }}</td>
+                            <th>Sensitive EPs</th><td>{{ result.summary.get('exposed_endpoints_detected', 0) }}</td>
                             <th>Sensitive Files</th><td>{{ result.summary.get('sensitive_files_detected', 0) }}</td>
-                            <th>Verified Exposures</th><td>{{ result.summary.get('verified_exposed_endpoints', 0) }}</td>
-                            <th>Hardening Issues</th><td>{{ result.summary.get('hardening_issues_detected', 0) }}</td>
                         </tr>
                         <tr>
-                            <th>Auth/Session</th><td>{{ result.summary.get('auth_session_issues_detected', 0) }}</td>
+                            <th>Verified EPs</th><td>{{ result.summary.get('verified_exposed_endpoints', 0) }}</td>
+                            <th>Hardening</th><td>{{ result.summary.get('hardening_issues_detected', 0) }}</td>
+                            <th>Auth Session</th><td>{{ result.summary.get('auth_session_issues_detected', 0) }}</td>
                             <th>API Issues</th><td>{{ result.summary.get('api_issues_detected', 0) }}</td>
                             <th>API Profile</th><td>{{ result.summary.get('api_profile_findings_detected', 0) }}</td>
-                            <th>Client Leaks</th><td>{{ result.summary.get('client_leaks_detected', 0) }}</td>
                         </tr>
                         <tr>
-                            <th>Credential Leaks</th><td>{{ result.summary.get('credential_leaks_detected', 0) }}</td>
+                            <th>Client Leaks</th><td>{{ result.summary.get('client_leaks_detected', 0) }}</td>
+                            <th>Cred Leaks</th><td>{{ result.summary.get('credential_leaks_detected', 0) }}</td>
                             <th>P1 Findings</th><td>{{ result.summary.get('priority_p1_detected', 0) }}</td>
                             <th>P2 Findings</th><td>{{ result.summary.get('priority_p2_detected', 0) }}</td>
                             <th>OWASP Top5</th><td>{{ result.summary.get('owasp_top5_detected', 0) }}/5</td>
-                            <th>Security Grade</th><td>{{ result.security_grade }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -831,7 +851,9 @@
             <p class="lede" style="margin-bottom:1rem;">PDF export with findings, priorities, evidence, and recommended actions.</p>
             <a class="download-btn" href="/jobs/{{ job.id }}/report.pdf">Download PDF</a>
         </section>
-    </main>
+            </main>
+        </div>
+    </div>
     <script>
         (function () {
             const toggles = document.querySelectorAll('.collapse-toggle');
