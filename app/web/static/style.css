@@ -691,7 +691,7 @@ tr:last-child td {
 }
 
 .summary-metrics-table {
-    min-width: 0;
+    min-width: 1040px;
     table-layout: fixed;
     width: 100%;
 }
@@ -705,6 +705,8 @@ tr:last-child td {
     text-transform: none;
     letter-spacing: 0.01em;
     border-right: 1px solid rgba(255, 255, 255, 0.06);
+    min-width: 92px;
+    line-height: 1.25;
 }
 
 .summary-metrics-table td {
@@ -712,6 +714,8 @@ tr:last-child td {
     font-size: 0.9rem;
     color: var(--text);
     border-right: 1px solid rgba(255, 255, 255, 0.03);
+    min-width: 56px;
+    line-height: 1.25;
 }
 
 .summary-metrics-table th,
@@ -723,6 +727,12 @@ tr:last-child td {
 
 .summary-metrics-table td {
     text-align: right;
+}
+
+@media (max-width: 1200px) {
+    .summary-metrics-table {
+        min-width: 920px;
+    }
 }
 
 .summary-metrics-table th:last-child,
