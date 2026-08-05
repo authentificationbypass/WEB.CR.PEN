@@ -218,6 +218,9 @@ async def run_scan(job: ScanJob) -> None:
             endpoint_limit=settings.active_security_endpoint_limit,
             api_limit=settings.active_security_api_limit,
             concurrency=settings.active_security_probe_concurrency,
+            sqli_enabled=settings.active_sqli_probe_enabled,
+            sqli_probe_limit=settings.active_sqli_probe_limit,
+            sqli_payload_limit=settings.active_sqli_payload_limit,
         )
         hardening_issue_count = len([f for f in security_findings if f.severity in ("high", "critical")])
         auth_issue_count = len([f for f in security_findings if f.area == "auth-session"])

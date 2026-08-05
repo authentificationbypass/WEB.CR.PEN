@@ -23,6 +23,9 @@ class Settings:
     active_security_endpoint_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_ENDPOINT_LIMIT", "14"))
     active_security_api_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_API_LIMIT", "10"))
     active_security_probe_concurrency: int = int(os.getenv("CYBERSEC_ACTIVE_SECURITY_PROBE_CONCURRENCY", "6"))
+    active_sqli_probe_enabled: bool = os.getenv("CYBERSEC_ACTIVE_SQLI_PROBE_ENABLED", "1") not in ("0", "false", "False")
+    active_sqli_probe_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SQLI_PROBE_LIMIT", "8"))
+    active_sqli_payload_limit: int = int(os.getenv("CYBERSEC_ACTIVE_SQLI_PAYLOAD_LIMIT", "4"))
     geolocation_api_base: str = os.getenv("CYBERSEC_GEOLOCATION_API_BASE", "http://ip-api.com/json")
     proxy_server: str | None = os.getenv("CYBERSEC_PROXY_SERVER") or None
     user_agent: str = os.getenv(

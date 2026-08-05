@@ -14,6 +14,7 @@ Local Python web application for defensive website security analysis. It crawls 
 - CMS/plugin component detection and CVE mapping
 - Sensitive file/endpoint discovery with active verification
 - Active Security Hardening Audit (auth/session, API, CORS, GraphQL, BOLA heuristics, client leaks)
+- Active SQL injection detector (error-based payload probing + SQL error signature matching + boolean delta heuristic)
 - OWASP Top 5 focused checks (A01-A05)
 - Focused checks panel for SQL injection and LLM security findings
 - Credential Leak Detector (username/password/token leakage in observed request URLs)
@@ -73,6 +74,9 @@ python -m pytest -q
 | CYBERSEC_ACTIVE_SECURITY_ENDPOINT_LIMIT | 14 | Max endpoint URLs in active hardening audit |
 | CYBERSEC_ACTIVE_SECURITY_API_LIMIT | 10 | Max API URLs in active hardening audit |
 | CYBERSEC_ACTIVE_SECURITY_PROBE_CONCURRENCY | 6 | Concurrency for active hardening probes |
+| CYBERSEC_ACTIVE_SQLI_PROBE_ENABLED | 1 | Enable active SQLi probing in security audit |
+| CYBERSEC_ACTIVE_SQLI_PROBE_LIMIT | 8 | Max candidate URLs with query parameters for SQLi probing |
+| CYBERSEC_ACTIVE_SQLI_PAYLOAD_LIMIT | 4 | Max SQLi payloads per tested parameter |
 | CYBERSEC_GEOLOCATION_API_BASE | http://ip-api.com/json | Geo/IP lookup service |
 | CYBERSEC_PROXY_SERVER | (unset) | Optional HTTP proxy |
 | CYBERSEC_USER_AGENT | PentestingWebCrawler/0.1 | Scanner user-agent |

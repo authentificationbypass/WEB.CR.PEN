@@ -58,6 +58,35 @@ class _FakeAsyncClientLlm:
         return _FakeResponse(url, 404, headers={"content-type": "application/json"}, text='{"error":"not found"}')
 
 
+class _FakeAsyncClientSqli:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, url: str):
+        lower = url.lower()
+        if "q=1%27123" in lower or "q=1'123" in lower:
+            return _FakeResponse(
+                url,
+                500,
+                headers={"content-type": "text/html"},
+                text="SQL syntax error near '123' on MySQL server",
+            )
+        if "q=1%27+or+%271%27%3d%271" in lower or "q=1' or '1'='1" in lower:
+            return _FakeResponse(url, 200, headers={"content-type": "text/html"}, text="Rows: 1200")
+        if "q=1%27+or+%271%27%3d%272" in lower or "q=1' or '1'='2" in lower:
+            return _FakeResponse(url, 200, headers={"content-type": "text/html"}, text="Rows: 0")
+        return _FakeResponse(url, 200, headers={"content-type": "text/html"}, text="normal response")
+
+    async def post(self, url: str, json=None):
+        return _FakeResponse(url, 404, headers={"content-type": "application/json"}, text='{"error":"not found"}')
+
+
 @pytest.mark.asyncio
 async def test_security_audit_detects_llm_prompt_injection_and_prompt_leak(monkeypatch) -> None:
     monkeypatch.setattr("app.analysis.security_audit.httpx.AsyncClient", _FakeAsyncClientLlm)
@@ -130,3 +159,37 @@ def test_owasp_top5_detects_sql_injection_indicators() -> None:
     assert a03.detected is True
     assert a03.count >= 2
     assert "injection" in a03.evidence.lower()
+
+
+@pytest.mark.asyncio
+async def test_security_audit_detects_active_error_based_sqli(monkeypatch) -> None:
+    monkeypatch.setattr("app.analysis.security_audit.httpx.AsyncClient", _FakeAsyncClientSqli)
+
+    requests = [
+        RequestRecord(
+            url="https://target.example/search?q=1",
+            domain="target.example",
+            method="GET",
+            resource_type="xhr",
+            protocol="https",
+            page_url="https://target.example",
+        )
+    ]
+
+    findings = await run_security_audit(
+        target_url="https://target.example",
+        pages=[],
+        requests=requests,
+        cookies=[],
+        tls_record=None,
+        timeout_seconds=2,
+        user_agent="pytest-agent",
+        endpoint_limit=2,
+        api_limit=2,
+        concurrency=2,
+        sqli_enabled=True,
+        sqli_probe_limit=2,
+        sqli_payload_limit=1,
+    )
+
+    assert any(f.category == "sqli-error-based" for f in findings)

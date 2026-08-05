@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlparse
 import httpx
 
 from app.analysis.headers import analyze_security_headers
+from app.analysis.sqli_detector import build_boolean_pair, generate_sqli_probes, has_query_params, match_sql_errors
 from app.models import CookieRecord, PageRecord, RequestRecord, SecurityAuditFinding, TlsRecord
 
 
@@ -249,6 +250,29 @@ def _discover_api_urls(target_url: str, pages: list[PageRecord], requests: list[
     return deduped
 
 
+def _discover_sqli_candidates(target_url: str, requests: list[RequestRecord], limit: int) -> list[str]:
+    target = urlparse(target_url)
+    out: list[str] = []
+    seen: set[str] = set()
+
+    for req in requests:
+        if not req.url or not has_query_params(req.url):
+            continue
+        parsed = urlparse(req.url)
+        if parsed.scheme != target.scheme or parsed.netloc != target.netloc:
+            continue
+        if req.method and req.method.upper() not in {"GET", "POST"}:
+            continue
+        if req.url in seen:
+            continue
+        seen.add(req.url)
+        out.append(req.url)
+        if len(out) >= limit:
+            break
+
+    return out
+
+
 def _audit_cookie_flags(cookies: list[CookieRecord]) -> list[SecurityAuditFinding]:
     findings: list[SecurityAuditFinding] = []
 
@@ -320,6 +344,9 @@ async def run_security_audit(
     endpoint_limit: int = 14,
     api_limit: int = 10,
     concurrency: int = 6,
+    sqli_enabled: bool = True,
+    sqli_probe_limit: int = 8,
+    sqli_payload_limit: int = 4,
 ) -> list[SecurityAuditFinding]:
     findings: list[SecurityAuditFinding] = []
     findings.extend(_audit_cookie_flags(cookies))
@@ -381,6 +408,7 @@ async def run_security_audit(
     target = urlparse(target_url)
     endpoint_urls = _unique_same_origin_urls(target_url, pages, requests, endpoint_limit)
     api_urls = _discover_api_urls(target_url, pages, requests, api_limit)
+    sqli_urls = _discover_sqli_candidates(target_url, requests, max(0, sqli_probe_limit)) if sqli_enabled else []
 
     sem = asyncio.Semaphore(max(1, concurrency))
 
@@ -406,6 +434,73 @@ async def run_security_audit(
             ],
             return_exceptions=True,
         )
+
+        # 4) Active SQLi checks inspired by payload/error-signature fuzzing.
+        if sqli_urls:
+            for candidate_url in sqli_urls:
+                baseline = await _get(candidate_url, client)
+                baseline_text = baseline.text if baseline is not None else ""
+                baseline_hits = set(match_sql_errors(baseline_text))
+
+                probes = generate_sqli_probes(candidate_url, payload_limit=sqli_payload_limit)
+                seen_param_hits: set[str] = set()
+                for probe in probes:
+                    probe_resp = await _get(probe.injected_url, client)
+                    if probe_resp is None:
+                        continue
+                    probe_hits = set(match_sql_errors(probe_resp.text or ""))
+                    fresh_hits = [h for h in probe_hits if h not in baseline_hits]
+                    if not fresh_hits:
+                        continue
+
+                    hit_key = f"{probe.parameter}:{','.join(sorted(fresh_hits))}"
+                    if hit_key in seen_param_hits:
+                        continue
+                    seen_param_hits.add(hit_key)
+                    findings.append(_build(
+                        area="api",
+                        category="sqli-error-based",
+                        title="Potential error-based SQL injection",
+                        severity="high",
+                        endpoint=probe.injected_url,
+                        status_code=probe_resp.status_code,
+                        evidence=(
+                            f"Injected parameter '{probe.parameter}' with payload '{probe.payload}' "
+                            f"triggered SQL error signature(s): {', '.join(sorted(fresh_hits))}."
+                        ),
+                        remediation="Use parameterized queries, strict server-side validation, and generic DB error handling.",
+                        confidence="high",
+                    ))
+
+                boolean_pair = build_boolean_pair(candidate_url)
+                if boolean_pair is None:
+                    continue
+                true_url, false_url = boolean_pair
+                true_resp = await _get(true_url, client)
+                false_resp = await _get(false_url, client)
+                if true_resp is None or false_resp is None:
+                    continue
+
+                true_len = len(true_resp.text or "")
+                false_len = len(false_resp.text or "")
+                max_len = max(true_len, false_len, 1)
+                length_delta = abs(true_len - false_len) / max_len
+                status_delta = true_resp.status_code != false_resp.status_code
+                if length_delta >= 0.35 or status_delta:
+                    findings.append(_build(
+                        area="api",
+                        category="sqli-boolean-based",
+                        title="Potential boolean-based SQL injection behavior",
+                        severity="medium",
+                        endpoint=true_url,
+                        status_code=true_resp.status_code,
+                        evidence=(
+                            f"Boolean SQLi probes produced divergent responses (status change={status_delta}, "
+                            f"body delta={length_delta:.2f})."
+                        ),
+                        remediation="Enforce parameterized queries and ensure identical error handling for invalid predicates.",
+                        confidence="medium",
+                    ))
 
     # 1) Active header hardening checks per endpoint
     for url, response in zip(endpoint_urls, endpoint_responses):
