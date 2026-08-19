@@ -2174,7 +2174,7 @@ tr:nth-child(even) td {
 
 .mini-chart-row {
     display: grid;
-    grid-template-columns: minmax(120px, 38%) 1fr auto;
+    grid-template-columns: minmax(90px, 35%) minmax(80px, 1fr) auto;
     gap: 0.75rem;
     align-items: center;
 }
@@ -2182,9 +2182,9 @@ tr:nth-child(even) td {
 .mini-chart-label {
     font-size: 0.82rem;
     color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
 }
 
 .mini-chart-track {
@@ -2192,13 +2192,15 @@ tr:nth-child(even) td {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
     overflow: hidden;
+    min-width: 48px;
 }
 
 .mini-chart-fill {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, #5f88c8 0%, #78a0de 100%);
+    background: linear-gradient(90deg, #5f88c8 0%, #84b9ff 100%);
     border-radius: 999px;
+    min-width: 8%;
 }
 
 .mini-chart-value {
@@ -2217,6 +2219,23 @@ tr:nth-child(even) td {
     place-items: center;
     color: var(--muted);
     font-size: 0.9rem;
+    padding: 1rem;
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .mini-chart-row {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
+    }
+
+    .mini-chart-label {
+        font-size: 0.76rem;
+    }
+
+    .mini-chart-value {
+        text-align: left;
+    }
 }
 
 .collapse-controls {

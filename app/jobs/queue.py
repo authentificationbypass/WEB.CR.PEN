@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 
 from app.models import JobStatus, ScanJob
 from app.db import Database
@@ -16,8 +18,36 @@ class JobQueue:
     def __init__(self, runner: ScanRunner, max_workers: int = 2) -> None:
         self._runner = runner
         self._jobs: dict[str, ScanJob] = {}
+        self._tasks: dict[str, asyncio.Task[None]] = {}
         self._semaphore = asyncio.Semaphore(max_workers)
         self._db = Database()
+        self._recover_stale_jobs()
+
+    def _recover_stale_jobs(self) -> None:
+        with sqlite3.connect(self._db.path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM scans WHERE status = ? ORDER BY updated_at DESC",
+                (JobStatus.RUNNING.value,),
+            ).fetchall()
+
+        for row in rows:
+            existing = self._jobs.get(row["id"])
+            if existing is not None:
+                continue
+
+            job = ScanJob(
+                target_url=row["target_url"],
+                id=row["id"],
+                status=JobStatus.RUNNING,
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                progress_message="Recovered after restart",
+                error=row["error"] or "Job was left running after a restart",
+            )
+            job.set_status(JobStatus.FAILED, "Recovered after restart")
+            self._jobs[job.id] = job
+            self._db.save_job(job)
 
     def list_jobs(self) -> list[ScanJob]:
         return sorted(self._jobs.values(), key=lambda job: job.created_at, reverse=True)
@@ -29,7 +59,9 @@ class JobQueue:
         job = ScanJob(target_url=target_url)
         self._jobs[job.id] = job
         self._db.save_job(job)
-        asyncio.create_task(self._execute(job))
+        task = asyncio.create_task(self._execute(job))
+        self._tasks[job.id] = task
+        task.add_done_callback(lambda done_task, job_id=job.id: self._tasks.pop(job_id, None))
         return job
 
     async def _execute(self, job: ScanJob) -> None:

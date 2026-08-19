@@ -25,15 +25,17 @@ def _build_svg_bar_chart(items: list[tuple[str, int]], empty_text: str) -> str:
     if not items:
         return f'<div class="chart-empty">{escape(empty_text)}</div>'
 
-    top_items = items[:8]
+    top_items = items[:10]
     max_value = max(value for _, value in top_items) or 1
 
     rows: list[str] = []
     for label, value in top_items:
-        width = int((value / max_value) * 100)
+        raw_width = (value / max_value) * 100
+        width = max(8, int(raw_width))
+        safe_label = escape(label)
         rows.append(
             "<li class=\"mini-chart-row\">"
-            f"<span class=\"mini-chart-label\" title=\"{escape(label)}\">{escape(label)}</span>"
+            f"<span class=\"mini-chart-label\" title=\"{safe_label}\">{safe_label}</span>"
             f"<div class=\"mini-chart-track\"><span class=\"mini-chart-fill\" style=\"width:{width}%\"></span></div>"
             f"<span class=\"mini-chart-value\">{value}</span>"
             "</li>"
